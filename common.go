@@ -16,7 +16,7 @@ const (
 	MaxAddressCount = 10
 )
 
-type sndrcvinfo struct {
+type sndrcvInfo struct {
 	stream     uint16
 	ssn        uint16
 	flags      uint16
@@ -54,44 +54,3 @@ func bindsocket(laddr *SCTPAddr) (int, error) {
 	}
 	return sock, nil
 }
-
-// TCP/SCTP address interface
-/*
-type Addr interface {
-	String() string
-	Equals(Addr) bool
-	Network() string
-}
-
-type Listener interface {
-	Close() error
-	Accept() (Conn, error)
-	Connect(Addr) error
-	LocalAddr() (Addr, error)
-}
-
-type Conn interface {
-	Close() error
-	Abort() error
-	Write([]byte) (int, error)
-	Read() ([]byte, error)
-	LocalAddr() (Addr, error)
-	RemoteAddr() (Addr, error)
-}
-
-func Listen(a Addr) (Listener, error) {
-	s, ok := a.(*SCTPAddr)
-	if ok {
-		return ListenSCTP(s)
-	}
-	//t, ok := a.(TCPAddr)
-	if ok {
-		// return ListenTCP(addr)
-	}
-	return nil, errors.New("unknown address type")
-}
-
-func ResolveAddr(s, addr string) (Addr, error) {
-	return ResolveSCTPAddr(addr)
-}
-*/

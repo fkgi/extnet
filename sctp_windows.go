@@ -140,7 +140,7 @@ func sockOpen() (int, error) {
 }
 
 func sockListen(fd int) error {
-	return syscall.Listen(syscall.Handle(fd), RCV_BUFFER)
+	return syscall.Listen(syscall.Handle(fd), ListenBufferSize)
 }
 
 func sockClose(fd int) error {

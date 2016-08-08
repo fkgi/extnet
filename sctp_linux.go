@@ -20,20 +20,22 @@ import (
 )
 
 const (
-	IPPROTO_SCTP        = C.IPPROTO_SCTP
-	SCTP_BINDX_ADD_ADDR = C.SCTP_BINDX_ADD_ADDR
-	SCTP_BINDX_REM_ADDR = C.SCTP_BINDX_REM_ADDR
+	// IPPROTO_SCTP        = C.IPPROTO_SCTP
+	// SCTP_BINDX_ADD_ADDR = C.SCTP_BINDX_ADD_ADDR
+	// SCTP_BINDX_REM_ADDR = C.SCTP_BINDX_REM_ADDR
 
 	SCTP_EOF       = C.SCTP_EOF
 	SCTP_ABORT     = C.SCTP_ABORT
 	SCTP_UNORDERED = C.SCTP_UNORDERED
 	SCTP_ADDR_OVER = C.SCTP_ADDR_OVER
+
 	// SCTP_SENDALL = C.SCTP_SENDALL
 	// SCTP_EOR = C.SCTP_EOR
+
 	SCTP_SACK_IMMEDIATELY = C.SCTP_SACK_IMMEDIATELY
 
-	SOL_SCTP    = C.SOL_SCTP
-	SCTP_EVENTS = C.SCTP_EVENTS
+	// SOL_SCTP    = C.SOL_SCTP
+	// SCTP_EVENTS = C.SCTP_EVENTS
 
 	MSG_NOTIFICATION            = C.MSG_NOTIFICATION
 	SCTP_ASSOC_CHANGE           = C.SCTP_ASSOC_CHANGE
@@ -52,29 +54,29 @@ const (
 	SCTP_CANT_STR_ASSOC = C.SCTP_CANT_STR_ASSOC
 )
 
-type sctp_assoc_t C.sctp_assoc_t
+type assocT C.sctp_assoc_t
 
-type sctp_event_subscribe struct {
-	data_io_event          uint8
-	association_event      uint8
-	address_event          uint8
-	peer_error_event       uint8
-	shutdown_event         uint8
-	partial_delivery_event uint8
-	adaptation_layer_event uint8
-	authentication_event   uint8
+type eventSubscribe struct {
+	dataIo          uint8
+	association     uint8
+	address         uint8
+	peerError       uint8
+	shutdown        uint8
+	partialDelivery uint8
+	adaptationLayer uint8
+	authentication  uint8
 }
 
-func set_notify(fd int) error {
-	event := sctp_event_subscribe{}
-	event.data_io_event = 1
-	event.association_event = 1
-	event.address_event = 1
-	event.peer_error_event = 1
-	event.shutdown_event = 1
-	event.partial_delivery_event = 1
-	event.adaptation_layer_event = 1
-	event.authentication_event = 1
+func setNotify(fd int) error {
+	event := eventSubscribe{}
+	event.dataIo = 1
+	event.association = 1
+	event.address = 1
+	event.peerError = 1
+	event.shutdown = 1
+	event.partialDelivery = 1
+	event.adaptationLayer = 1
+	event.authentication = 1
 
 	n, e := C.setsockopt(
 		C.int(fd),
@@ -88,19 +90,19 @@ func set_notify(fd int) error {
 	return nil
 }
 
-func sock_open() (int, error) {
-	return syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, IPPROTO_SCTP)
+func sockOpen() (int, error) {
+	return syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, C.IPPROTO_SCTP)
 }
 
-func sock_listen(fd int) error {
-	return syscall.Listen(fd, RCV_BUFFER)
+func sockListen(fd int) error {
+	return syscall.Listen(fd, ListenBufferSize)
 }
 
-func sock_close(fd int) error {
+func sockClose(fd int) error {
 	return syscall.Close(fd)
 }
 
-func sctp_bindx(fd int, addr []syscall.RawSockaddrInet4) error {
+func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
 	n, e := C.sctp_bindx(
 		C.int(fd),
 		(*C.struct_sockaddr)(unsafe.Pointer(&addr[0])),
@@ -112,7 +114,7 @@ func sctp_bindx(fd int, addr []syscall.RawSockaddrInet4) error {
 	return nil
 }
 
-func sctp_connectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
+func sctpConnectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
 	t := 0
 	n, e := C.sctp_connectx(
 		C.int(fd),
@@ -125,7 +127,7 @@ func sctp_connectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
 	return t, nil
 }
 
-func sctp_send(fd int, b []byte, info *sctp_sndrcvinfo, flag int) (int, error) {
+func sctpSend(fd int, b []byte, info *sndrcvInfo, flag int) (int, error) {
 	buf := unsafe.Pointer(nil)
 	if len(b) > 0 {
 		buf = unsafe.Pointer(&b[0])
@@ -142,7 +144,7 @@ func sctp_send(fd int, b []byte, info *sctp_sndrcvinfo, flag int) (int, error) {
 	return int(n), nil
 }
 
-func sctp_recvmsg(fd int, b []byte, info *sctp_sndrcvinfo, flag *int) (int, error) {
+func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
 	n, e := C.sctp_recvmsg(
 		C.int(fd),
 		unsafe.Pointer(&b[0]),
@@ -157,8 +159,8 @@ func sctp_recvmsg(fd int, b []byte, info *sctp_sndrcvinfo, flag *int) (int, erro
 	return int(n), nil
 }
 
-func sctp_getladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
-	addr := make([]syscall.RawSockaddrInet4, ADDR_BUFFER_LEN)
+func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
+	addr := make([]syscall.RawSockaddrInet4, MaxAddressCount)
 	n, e := C.sctp_getladdrs(
 		C.int(fd),
 		C.sctp_assoc_t(id),
@@ -175,8 +177,8 @@ func sctp_getladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
 	return r, nil
 }
 
-func sctp_getpaddrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
-	addr := make([]syscall.RawSockaddrInet4, ADDR_BUFFER_LEN)
+func sctpGetpaddrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
+	addr := make([]syscall.RawSockaddrInet4, MaxAddressCount)
 	n, e := C.sctp_getpaddrs(
 		C.int(fd),
 		C.sctp_assoc_t(C.int(id)),

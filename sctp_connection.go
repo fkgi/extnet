@@ -35,7 +35,7 @@ func (c *SCTPConn) Abort(reason string) error {
 }
 
 func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
-	info := sndrcvinfo{}
+	info := sndrcvInfo{}
 	info.flags = flag
 	info.assocID = c.id
 	return sctpSend(c.l.sock, b, &info, 0)

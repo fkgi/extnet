@@ -16,7 +16,8 @@ type SCTPListener struct {
 	accept chan *SCTPConn
 }
 
-// Accept implements the Accept method in the Listener interface; it waits for the next call and returns a generic Conn.
+// Accept implements the Accept method in the Listener interface;
+// it waits for the next call and returns a generic Conn.
 func (l *SCTPListener) Accept() (net.Conn, error) {
 	return l.AcceptSCTP()
 }
@@ -25,7 +26,9 @@ func (l *SCTPListener) Accept() (net.Conn, error) {
 func (l *SCTPListener) AcceptSCTP() (c *SCTPConn, e error) {
 	c = <-l.accept
 	if c == nil {
-		e = &net.OpError{Op: "accept", Net: "sctp", Addr: l.Addr(), Err: errors.New("socket is closed")}
+		e = &net.OpError{
+			Op: "accept", Net: "sctp", Addr: l.Addr(),
+			Err: errors.New("socket is closed")}
 	}
 	return
 }
@@ -65,7 +68,7 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	e = sockListen(sock)
 	if e != nil {
 		sockClose(sock)
-		return nil, &net.OpError{Op: "listen", Net: "sctp", Addr: nil, Err: e}
+		return nil, &net.OpError{Op: "listen", Net: "sctp", Source: laddr, Err: e}
 	}
 
 	// create listener
@@ -83,22 +86,25 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 
 // Connect create new connection of this listener
 func (l *SCTPListener) Connect(addr net.Addr) error {
-	a, ok := addr.(*SCTPAddr)
-	if ok {
+	if a, ok := addr.(*SCTPAddr); ok {
 		return l.ConnectSCTP(a)
 	}
-	return errors.New("invalid Addr, not SCTPAddr")
+	return &net.OpError{
+		Op: "connect", Net: "sctp", Source: l.addr, Addr: addr,
+		Err: errors.New("invalid Addr, not SCTPAddr")}
 }
 
 // ConnectSCTP create new connection of this listener
 func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 	if l.sock == -1 {
-		return errors.New("socket is closed")
+		return &net.OpError{
+			Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr,
+			Err: errors.New("socket is closed")}
 	}
 
 	// connect SCTP connection to raddr
 	_, e := sctpConnectx(l.sock, raddr.rawAddr())
-	return e
+	return &net.OpError{Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr, Err: e}
 }
 
 type sctpTlv struct {
@@ -110,7 +116,7 @@ type sctpTlv struct {
 // read data from buffer
 func read(l *SCTPListener) {
 	buf := make([]byte, RxBufferSize)
-	info := sndrcvinfo{}
+	info := sndrcvInfo{}
 	flag := 0
 
 	for {
@@ -147,21 +153,21 @@ func read(l *SCTPListener) {
 			case SCTP_SENDER_DRY_EVENT:
 				log.Println("[sender dry:", int(info.assocID))
 			}
+
 			if e != nil {
 				log.Println(e)
 			}
 		} else {
 			log.Println("[data:", int(info.assocID))
 			// matching exist connection
-			p, ok := l.pipes[info.assocID]
-			if ok {
+			if p, ok := l.pipes[info.assocID]; ok {
 				p.Write(buf[:n])
 			}
 		}
 	}
 }
 
-type sctpAssocChange struct {
+type assocChange struct {
 	chtype          uint16
 	flags           uint16
 	length          uint32
@@ -173,7 +179,7 @@ type sctpAssocChange struct {
 }
 
 func (l *SCTPListener) assocChangeNotify(buf []byte) error {
-	change := (*sctpAssocChange)(unsafe.Pointer(&buf[0]))
+	change := (*assocChange)(unsafe.Pointer(&buf[0]))
 
 	switch change.state {
 	case SCTP_COMM_UP:
