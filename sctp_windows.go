@@ -98,33 +98,33 @@ func init() {
 	}
 }
 
-type sctpEventSubscribe struct {
-	dataIoEvent          uint8
-	associationEvent     uint8
-	addressEvent         uint8
-	sendFailureEvent     uint8
-	peerErrorEvent       uint8
-	shutdownEvent        uint8
-	partialDeliveryEvent uint8
-	adaptationLayerEvent uint8
-	authenticationEvent  uint8
-	senderDryEvent       uint8
-	streamResetEvents    uint8
+type eventSubscribe struct {
+	dataIo          uint8
+	association     uint8
+	address         uint8
+	sendFailure     uint8
+	peerError       uint8
+	shutdown        uint8
+	partialDelivery uint8
+	adaptationLayer uint8
+	authentication  uint8
+	senderDry       uint8
+	streamReset     uint8
 }
 
 func setNotify(fd int) error {
-	event := sctp_event_subscribe{}
-	event.data_io_event = 1
-	event.association_event = 0
-	event.address_event = 0
-	event.send_failure_event = 0
-	event.peer_error_event = 0
-	event.shutdown_event = 1
-	event.partial_delivery_event = 0
-	event.adaptation_layer_event = 0
-	event.authentication_event = 0
-	event.sender_dry_event = 0
-	event.stream_reset_events = 0
+	event := eventSubscribe{}
+	event.dataIo = 1
+	event.association = 0
+	event.address = 0
+	event.sendFailure = 0
+	event.peerError = 0
+	event.shutdown = 1
+	event.partialDelivery = 0
+	event.adaptationLayer = 0
+	event.authentication = 0
+	event.senderDry = 0
+	event.streamReset = 0
 
 	return syscall.Setsockopt(
 		syscall.Handle(fd),
@@ -153,8 +153,8 @@ func sockClose(fd int) error {
 }
 
 func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
-	n, _, e := fsctp_bindx.Call(
-		fd,
+	n, _, e := fsctpBindx.Call(
+		uintptr(fd),
 		uintptr(unsafe.Pointer(&addr[0])),
 		uintptr(len(addr)),
 		SCTP_BINDX_ADD_ADDR)
@@ -166,8 +166,8 @@ func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
 
 func sctpConnectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
 	t := 0
-	n, _, e := fsctp_connectx.Call(
-		fd,
+	n, _, e := fsctpConnectx.Call(
+		uintptr(fd),
 		uintptr(unsafe.Pointer(&addr[0])),
 		uintptr(len(addr)),
 		uintptr(unsafe.Pointer(&t)))
@@ -177,13 +177,13 @@ func sctpConnectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
 	return t, nil
 }
 
-func sctpSend(fd int, b []byte, info *sndrcvinfo, flag int) (int, error) {
+func sctpSend(fd int, b []byte, info *sndrcvInfo, flag int) (int, error) {
 	buf := uintptr(0)
 	if len(b) != 0 {
 		buf = uintptr(unsafe.Pointer(&b[0]))
 	}
-	n, _, e := fsctp_send.Call(
-		fd,
+	n, _, e := fsctpSend.Call(
+		uintptr(fd),
 		buf,
 		uintptr(len(b)),
 		uintptr(unsafe.Pointer(info)),
@@ -194,9 +194,9 @@ func sctpSend(fd int, b []byte, info *sndrcvinfo, flag int) (int, error) {
 	return int(n), nil
 }
 
-func sctpRecvmsg(fd int, b []byte, info *sndrcvinfo, flag *int) (int, error) {
-	n, _, e := fsctp_recvmsg.Call(
-		fd,
+func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
+	n, _, e := fsctpRecvmsg.Call(
+		uintptr(fd),
 		uintptr(unsafe.Pointer(&b[0])),
 		uintptr(len(b)),
 		0,
@@ -211,30 +211,30 @@ func sctpRecvmsg(fd int, b []byte, info *sndrcvinfo, flag *int) (int, error) {
 
 func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
 	addr := make([]syscall.RawSockaddrInet4, 100)
-	n, _, e := fsctp_getladdrs.Call(
-		fd,
+	n, _, e := fsctpGetladdrs.Call(
+		uintptr(fd),
 		uintptr(id),
 		uintptr(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
 		return nil, e
 	}
 	r := addr[:int(n)]
-	fsctp_freeladdrs.Call(uintptr(unsafe.Pointer(&addr[0])))
+	fsctpFreeladdrs.Call(uintptr(unsafe.Pointer(&addr[0])))
 
 	return r, nil
 }
 
 func sctpGetpaddrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
 	addr := make([]syscall.RawSockaddrInet4, 100)
-	n, _, e := fsctp_getpaddrs.Call(
-		fd,
+	n, _, e := fsctpGetpaddrs.Call(
+		uintptr(fd),
 		uintptr(id),
 		uintptr(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
 		return nil, e
 	}
 	r := addr[:int(n)]
-	fsctp_freepaddrs.Call(uintptr(unsafe.Pointer(&addr[0])))
+	fsctpFreepaddrs.Call(uintptr(unsafe.Pointer(&addr[0])))
 
 	return r, nil
 }
