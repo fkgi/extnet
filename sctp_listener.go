@@ -12,7 +12,7 @@ import (
 type SCTPListener struct {
 	sock   int
 	addr   net.Addr
-	pipes  map[int32]*io.PipeWriter
+	pipes  map[assocT]*io.PipeWriter
 	accept chan *SCTPConn
 }
 
@@ -75,7 +75,7 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	l := &SCTPListener{}
 	l.sock = sock
 	l.addr = laddr
-	l.pipes = make(map[int32]*io.PipeWriter)
+	l.pipes = make(map[assocT]*io.PipeWriter)
 	l.accept = make(chan *SCTPConn, ListenBufferSize)
 
 	// start reading buffer
@@ -131,26 +131,26 @@ func read(l *SCTPListener) {
 		}
 
 		// check message type is notify
-		if flag&MSG_NOTIFICATION == MSG_NOTIFICATION {
+		if flag&msgNotification == msgNotification {
 			tlv := (*sctpTlv)(unsafe.Pointer(&buf[0]))
 
 			e = error(nil)
 			switch tlv.snType {
-			case SCTP_ASSOC_CHANGE:
+			case sctpAssocChange:
 				e = l.assocChangeNotify(buf[:n])
-			case SCTP_PEER_ADDR_CHANGE:
+			case sctpPeerAddrChange:
 				log.Println("[peer addr change:", int(info.assocID))
-			case SCTP_SEND_FAILED:
+			case sctpSendFailed:
 				log.Println("[send failed:", int(info.assocID))
-			case SCTP_REMOTE_ERROR:
+			case sctpRemoteError:
 				log.Println("[remote error:", int(info.assocID))
-			case SCTP_SHUTDOWN_EVENT:
+			case sctpShutdownEvent:
 				log.Println("[shutdown event:", int(info.assocID))
-			case SCTP_PARTIAL_DELIVERY_EVENT:
+			case sctpPartialDeliveryEvent:
 				log.Println("[partial delivery:", int(info.assocID))
-			case SCTP_ADAPTATION_INDICATION:
+			case sctpAdaptationIndication:
 				log.Println("[adaptation indication:", int(info.assocID))
-			case SCTP_SENDER_DRY_EVENT:
+			case sctpSenderDryEvent:
 				log.Println("[sender dry:", int(info.assocID))
 			}
 
@@ -175,14 +175,14 @@ type assocChange struct {
 	sacError        uint16
 	outboundStreams uint16
 	inboundStreams  uint16
-	assocID         int32
+	assocID         assocT
 }
 
 func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 	change := (*assocChange)(unsafe.Pointer(&buf[0]))
 
 	switch change.state {
-	case SCTP_COMM_UP:
+	case sctpCommUp:
 		log.Println("[assoc change (comm up):", change.assocID)
 
 		if _, ok := l.pipes[change.assocID]; ok {
@@ -204,8 +204,8 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 		if l.accept != nil {
 			l.accept <- c
 		}
-	case SCTP_COMM_LOST, SCTP_SHUTDOWN_COMP:
-		if change.state == SCTP_COMM_LOST {
+	case sctpCommLost, sctpShutdownComp:
+		if change.state == sctpCommLost {
 			log.Println("[assoc change (comm lost):", change.assocID)
 		} else {
 			log.Println("[assoc change (shutdown comp):", change.assocID)
@@ -218,12 +218,12 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 		delete(l.pipes, change.assocID)
 		w.Close()
 
-		if change.state == SCTP_COMM_LOST {
+		if change.state == sctpCommLost {
 			return errors.New("association lost")
 		}
-	case SCTP_RESTART:
+	case sctpRestart:
 		log.Println("[assoc change (reset):", change.assocID)
-	case SCTP_CANT_STR_ASSOC:
+	case sctpCantStrAssoc:
 		log.Println("[assoc change (cant str assoc):", change.assocID)
 	}
 	return nil
@@ -277,101 +277,25 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 	// log.Println("[sender dry event:", int(change.sender_dry_assoc_id))
 */
 
-/*
-
-func (c *SCTPConn) SetRtoinfo(initial, max, min uint32) error {
-	attr := C.struct_sctp_rtoinfo{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.srto_assoc_id = c.id
-	attr.srto_initial = C.__u32(initial)
-	attr.srto_max = C.__u32(max)
-	attr.srto_min = C.__u32(min)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_RTOINFO, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
+type initmsg struct {
+	oStr      uint16
+	iStr      uint16
+	attempts  uint16
+	initTimeo uint16
 }
 
-func (c *SCTPConn) SetAssocinfo(
-	asocmaxrxt, number_peer_destinations uint16, peer_rwnd, local_rwnd, cookie_life uint32) error {
-	attr := C.struct_sctp_assocparams{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.sasoc_assoc_id = c.id
-	attr.sasoc_asocmaxrxt = C.__u16(asocmaxrxt)
-	attr.sasoc_number_peer_destinations = C.__u16(number_peer_destinations)
-	attr.sasoc_peer_rwnd = C.__u32(peer_rwnd)
-	attr.sasoc_local_rwnd = C.__u32(local_rwnd)
-	attr.sasoc_cookie_life = C.__u32(cookie_life)
-
+// SetInitmsg set init message parameter.
+// oStr is number of output stream.
+// iStr is maximum numnner of input stream.
+// attempts is maximum number of attempt count.
+// initTimeo is time of timeout.
+func (l *SCTPListener) SetInitmsg(oStr, iStr, attempts, initTimeo int) error {
+	attr := initmsg{
+		oStr:      uint16(oStr),
+		iStr:      uint16(iStr),
+		attempts:  uint16(attempts),
+		initTimeo: uint16(initTimeo)}
+	lng := unsafe.Sizeof(attr)
 	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_ASSOCINFO, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
+	return setSockOpt(l.sock, sctpInitMsg, p, lng)
 }
-
-func (lnr *SCTPListener) SetInitmsg(num_ostreams, instreams, attempts, init_timeo uint16) error {
-	attr := C.struct_sctp_initmsg{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.sinit_num_ostreams = C.__u16(num_ostreams)
-	attr.sinit_max_instreams = C.__u16(instreams)
-	attr.sinit_max_attempts = C.__u16(attempts)
-	attr.sinit_max_init_timeo = C.__u16(init_timeo)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(lnr.sock, C.SOL_SCTP, C.SCTP_INITMSG, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
-func (c *SCTPConn) SetNodelay(nodelay bool) error {
-	attr := nodelay
-	l := C.socklen_t(unsafe.Sizeof(attr))
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_NODELAY, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
-const (
-	HB_ENABLE         = uint32(C.SPP_HB_ENABLE)
-	HB_DISABLE        = uint32(C.SPP_HB_DISABLE)
-	HB_DEMAND         = uint32(C.SPP_HB_DEMAND)
-	PMTUD_ENABLE      = uint32(C.SPP_PMTUD_ENABLE)
-	PMTUD_DISABLE     = uint32(C.SPP_PMTUD_DISABLE)
-	SACKDELAY_ENABLE  = uint32(C.SPP_SACKDELAY_ENABLE)
-	SACKDELAY_DISABLE = uint32(C.SPP_SACKDELAY_DISABLE)
-	HB_TIME_IS_ZERO   = uint32(C.SPP_HB_TIME_IS_ZERO)
-)
-
-func (c *SCTPConn) SetPeerAddrParams(
-	hbinterval uint32, pathmaxrxt uint16, pathmtu, sackdelay, flags uint32) error {
-	attr := C.struct_sctp_paddrparams{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.spp_assoc_id = c.id
-	attr.spp_hbinterval = C.__u32(hbinterval)
-	attr.spp_pathmaxrxt = C.__u16(pathmaxrxt)
-	//attr.spp_pathmtu = C.__u32(pathmtu)
-	//attr.spp_sackdelay = C.__u32(sackdelay)
-	//attr.spp_flags = C.__u32(flags)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_PEER_ADDR_PARAMS, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-*/

@@ -16,42 +16,42 @@ import "C"
 import (
 	"syscall"
 	"unsafe"
-	// "log"
 )
 
 const (
-	// IPPROTO_SCTP        = C.IPPROTO_SCTP
-	// SCTP_BINDX_ADD_ADDR = C.SCTP_BINDX_ADD_ADDR
-	// SCTP_BINDX_REM_ADDR = C.SCTP_BINDX_REM_ADDR
-
-	SCTP_EOF       = C.SCTP_EOF
-	SCTP_ABORT     = C.SCTP_ABORT
-	SCTP_UNORDERED = C.SCTP_UNORDERED
-	SCTP_ADDR_OVER = C.SCTP_ADDR_OVER
+	sctpEoF       = C.SCTP_EOF
+	sctpAbort     = C.SCTP_ABORT
+	sctpUnordered = C.SCTP_UNORDERED
+	sctpAddrOver  = C.SCTP_ADDR_OVER
 
 	// SCTP_SENDALL = C.SCTP_SENDALL
 	// SCTP_EOR = C.SCTP_EOR
 
-	SCTP_SACK_IMMEDIATELY = C.SCTP_SACK_IMMEDIATELY
+	//SCTP_SACK_IMMEDIATELY = C.SCTP_SACK_IMMEDIATELY
 
 	// SOL_SCTP    = C.SOL_SCTP
 	// SCTP_EVENTS = C.SCTP_EVENTS
 
-	MSG_NOTIFICATION            = C.MSG_NOTIFICATION
-	SCTP_ASSOC_CHANGE           = C.SCTP_ASSOC_CHANGE
-	SCTP_PEER_ADDR_CHANGE       = C.SCTP_PEER_ADDR_CHANGE
-	SCTP_REMOTE_ERROR           = C.SCTP_REMOTE_ERROR
-	SCTP_SEND_FAILED            = C.SCTP_SEND_FAILED
-	SCTP_SHUTDOWN_EVENT         = C.SCTP_SHUTDOWN_EVENT
-	SCTP_ADAPTATION_INDICATION  = C.SCTP_ADAPTATION_INDICATION
-	SCTP_PARTIAL_DELIVERY_EVENT = C.SCTP_PARTIAL_DELIVERY_EVENT
-	SCTP_SENDER_DRY_EVENT       = C.SCTP_SENDER_DRY_EVENT
+	msgNotification          = C.MSG_NOTIFICATION
+	sctpAssocChange          = C.SCTP_ASSOC_CHANGE
+	sctpPeerAddrChange       = C.SCTP_PEER_ADDR_CHANGE
+	sctpRemoteError          = C.SCTP_REMOTE_ERROR
+	sctpSendFailed           = C.SCTP_SEND_FAILED
+	sctpShutdownEvent        = C.SCTP_SHUTDOWN_EVENT
+	sctpAdaptationIndication = C.SCTP_ADAPTATION_INDICATION
+	sctpPartialDeliveryEvent = C.SCTP_PARTIAL_DELIVERY_EVENT
+	sctpSenderDryEvent       = C.SCTP_SENDER_DRY_EVENT
 
-	SCTP_COMM_UP        = C.SCTP_COMM_UP
-	SCTP_COMM_LOST      = C.SCTP_COMM_LOST
-	SCTP_RESTART        = C.SCTP_RESTART
-	SCTP_SHUTDOWN_COMP  = C.SCTP_SHUTDOWN_COMP
-	SCTP_CANT_STR_ASSOC = C.SCTP_CANT_STR_ASSOC
+	sctpCommUp       = C.SCTP_COMM_UP
+	sctpCommLost     = C.SCTP_COMM_LOST
+	sctpRestart      = C.SCTP_RESTART
+	sctpShutdownComp = C.SCTP_SHUTDOWN_COMP
+	sctpCantStrAssoc = C.SCTP_CANT_STR_ASSOC
+
+	sctpInitMsg   = C.SCTP_INITMSG
+	sctpRtoInfo   = C.SCTP_RTOINFO
+	sctpAssocInfo = C.SCTP_ASSOCINFO
+	sctpNodelay   = C.SCTP_NODELAY
 )
 
 type assocT C.sctp_assoc_t
@@ -77,13 +77,19 @@ func setNotify(fd int) error {
 	event.partialDelivery = 1
 	event.adaptationLayer = 1
 	event.authentication = 1
+	l := unsafe.Sizeof(event)
+	p := unsafe.Pointer(&event)
 
+	return setSockOpt(fd, C.SCTP_EVENTS, p, l)
+}
+
+func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 	n, e := C.setsockopt(
 		C.int(fd),
 		C.SOL_SCTP,
-		C.SCTP_EVENTS,
-		unsafe.Pointer(&event),
-		C.socklen_t(unsafe.Sizeof(event)))
+		C.int(opt),
+		p,
+		C.socklen_t(l))
 	if int(n) < 0 {
 		return e
 	}

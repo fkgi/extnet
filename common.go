@@ -25,7 +25,7 @@ type sndrcvInfo struct {
 	timetolive uint32
 	tsn        uint32
 	cumtsn     uint32
-	assocID    int32
+	assocID    assocT
 }
 
 // bind SCTP socket

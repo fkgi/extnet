@@ -4,12 +4,13 @@ import (
 	"io"
 	"net"
 	"time"
+	"unsafe"
 )
 
 // SCTPConn is an implementation of the Conn interface for SCTP network connections.
 type SCTPConn struct {
 	l    *SCTPListener
-	id   int32
+	id   assocT
 	r    *io.PipeReader
 	addr net.Addr
 }
@@ -24,13 +25,13 @@ func (c *SCTPConn) Write(b []byte) (int, error) {
 
 // Close closes the connection.
 func (c *SCTPConn) Close() error {
-	_, e := c.send([]byte{}, SCTP_EOF)
+	_, e := c.send([]byte{}, sctpEoF)
 	return e
 }
 
 // Abort closes the connection with abort message.
 func (c *SCTPConn) Abort(reason string) error {
-	_, e := c.send([]byte(reason), SCTP_ABORT)
+	_, e := c.send([]byte(reason), sctpAbort)
 	return e
 }
 
@@ -77,7 +78,7 @@ func DialSCTP(laddr, raddr *SCTPAddr) (c *SCTPConn, e error) {
 	l := &SCTPListener{}
 	l.sock = sock
 	l.addr = laddr
-	l.pipes = make(map[int32]*io.PipeWriter)
+	l.pipes = make(map[assocT]*io.PipeWriter)
 	l.accept = make(chan *SCTPConn, 1)
 
 	// start reading buffer
@@ -94,72 +95,59 @@ func DialSCTP(laddr, raddr *SCTPAddr) (c *SCTPConn, e error) {
 	return
 }
 
+type rtoinfo struct {
+	assocID assocT
+	ini     uint32
+	max     uint32
+	min     uint32
+}
+
+// SetRtoInfo set retransmit timer options
+func (c *SCTPConn) SetRtoInfo(ini, min, max int) error {
+	attr := rtoinfo{
+		assocID: c.id,
+		ini:     uint32(ini),
+		max:     uint32(max),
+		min:     uint32(min)}
+	l := unsafe.Sizeof(attr)
+	p := unsafe.Pointer(&attr)
+
+	return setSockOpt(c.l.sock, sctpRtoInfo, p, l)
+}
+
+type assocparams struct {
+	assocID     assocT
+	pRwnd       uint32
+	lRwnd       uint32
+	cLife       uint32
+	assocMaxRxt uint16
+	numPeerDest uint16
+}
+
+// SetAssocinfo set association parameter
+func (c *SCTPConn) SetAssocinfo(pRwnd, lRwnd, cLife, assocMaxRxt, numPeerDest int) error {
+	attr := assocparams{
+		assocID:     c.id,
+		pRwnd:       uint32(pRwnd),
+		lRwnd:       uint32(lRwnd),
+		cLife:       uint32(cLife),
+		assocMaxRxt: uint16(assocMaxRxt),
+		numPeerDest: uint16(numPeerDest)}
+	l := unsafe.Sizeof(attr)
+	p := unsafe.Pointer(&attr)
+
+	return setSockOpt(c.l.sock, sctpAssocInfo, p, l)
+}
+
+// SetNodelay set delay answer or not
+func (c *SCTPConn) SetNodelay(attr bool) error {
+	l := unsafe.Sizeof(attr)
+	p := unsafe.Pointer(&attr)
+
+	return setSockOpt(c.l.sock, sctpNodelay, p, l)
+}
+
 /*
-func (c *SCTPConn) SetRtoinfo(initial, max, min uint32) error {
-	attr := C.struct_sctp_rtoinfo{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.srto_assoc_id = c.id
-	attr.srto_initial = C.__u32(initial)
-	attr.srto_max = C.__u32(max)
-	attr.srto_min = C.__u32(min)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_RTOINFO, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
-func (c *SCTPConn) SetAssocinfo(
-	asocmaxrxt, number_peer_destinations uint16, peer_rwnd, local_rwnd, cookie_life uint32) error {
-	attr := C.struct_sctp_assocparams{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.sasoc_assoc_id = c.id
-	attr.sasoc_asocmaxrxt = C.__u16(asocmaxrxt)
-	attr.sasoc_number_peer_destinations = C.__u16(number_peer_destinations)
-	attr.sasoc_peer_rwnd = C.__u32(peer_rwnd)
-	attr.sasoc_local_rwnd = C.__u32(local_rwnd)
-	attr.sasoc_cookie_life = C.__u32(cookie_life)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_ASSOCINFO, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
-func (lnr *SCTPListener) SetInitmsg(num_ostreams, instreams, attempts, init_timeo uint16) error {
-	attr := C.struct_sctp_initmsg{}
-	l := C.socklen_t(unsafe.Sizeof(attr))
-
-	attr.sinit_num_ostreams = C.__u16(num_ostreams)
-	attr.sinit_max_instreams = C.__u16(instreams)
-	attr.sinit_max_attempts = C.__u16(attempts)
-	attr.sinit_max_init_timeo = C.__u16(init_timeo)
-
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(lnr.sock, C.SOL_SCTP, C.SCTP_INITMSG, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
-func (c *SCTPConn) SetNodelay(nodelay bool) error {
-	attr := nodelay
-	l := C.socklen_t(unsafe.Sizeof(attr))
-	p := unsafe.Pointer(&attr)
-	i, e := C.setsockopt(c.sock, C.SOL_SCTP, C.SCTP_NODELAY, p, l)
-	if int(i) < 0 {
-		return e
-	}
-	return nil
-}
-
 const (
 	HB_ENABLE         = uint32(C.SPP_HB_ENABLE)
 	HB_DISABLE        = uint32(C.SPP_HB_DISABLE)
