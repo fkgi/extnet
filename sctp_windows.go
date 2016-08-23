@@ -7,37 +7,43 @@ import (
 )
 
 const (
-	IPPROTO_SCTP        = 0x84
-	SCTP_BINDX_ADD_ADDR = 0x00008001
-	SCTP_BINDX_REM_ADDR = 0x00008002
+	ipprotoSctp      = 0x84
+	sctpBindxAddAddr = 0x00008001
+	// sctpBindxRemAddr = 0x00008002
 
-	SCTP_EOF       = 0x0100
-	SCTP_ABORT     = 0x0200
-	SCTP_UNORDERED = 0x0400
-	SCTP_ADDR_OVER = 0x0800
-	//	SCTP_SENDALL = 0x1000
-	//	SCTP_EOR = 0x2000
-	SCTP_SACK_IMMEDIATELY = 0x4000
+	sctpEoF   = 0x0100
+	sctpAbort = 0x0200
+	// SCTP_UNORDERED = 0x0400
+	// SCTP_ADDR_OVER = 0x0800
+	// SCTP_SENDALL = 0x1000
+	// SCTP_EOR = 0x2000
+	// SCTP_SACK_IMMEDIATELY = 0x4000
 
-	SOL_SCTP    = 132
-	SCTP_EVENTS = 0x0000000c
+	// solSctp     = 132
+	sctpRtoInfo   = 0x00000001
+	sctpAssocInfo = 0x00000002
+	sctpInitMsg   = 0x00000003
+	sctpNodelay   = 0x00000004
+	sctpEvents    = 0x0000000c
 
-	MSG_NOTIFICATION            = 0x1000
-	SCTP_ASSOC_CHANGE           = 0x0001
-	SCTP_PEER_ADDR_CHANGE       = 0x0002
-	SCTP_REMOTE_ERROR           = 0x0003
-	SCTP_SEND_FAILED            = 0x0004
-	SCTP_SHUTDOWN_EVENT         = 0x0005
-	SCTP_ADAPTATION_INDICATION  = 0x0006
-	SCTP_PARTIAL_DELIVERY_EVENT = 0x0007
-	SCTP_SENDER_DRY_EVENT       = 0x000a
+	msgNotification          = 0x1000
+	sctpAssocChange          = 0x0001
+	sctpPeerAddrChange       = 0x0002
+	sctpRemoteError          = 0x0003
+	sctpSendFailed           = 0x0004
+	sctpShutdownEvent        = 0x0005
+	sctpAdaptationIndication = 0x0006
+	sctpPartialDeliveryEvent = 0x0007
+	sctpSenderDryEvent       = 0x000a
 
-	SCTP_COMM_UP        = 0x0001
-	SCTP_COMM_LOST      = 0x0002
-	SCTP_RESTART        = 0x0003
-	SCTP_SHUTDOWN_COMP  = 0x0004
-	SCTP_CANT_STR_ASSOC = 0x0005
+	sctpCommUp       = 0x0001
+	sctpCommLost     = 0x0002
+	sctpRestart      = 0x0003
+	sctpShutdownComp = 0x0004
+	sctpCantStrAssoc = 0x0005
 )
+
+type assocT uint32
 
 var (
 	fsctpBindx      *syscall.Proc
@@ -126,16 +132,24 @@ func setNotify(fd int) error {
 	event.senderDry = 0
 	event.streamReset = 0
 
+	l := unsafe.Sizeof(event)
+	p := unsafe.Pointer(&event)
+
+	return setSockOpt(fd, sctpEvents, p, l)
+}
+
+func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 	return syscall.Setsockopt(
 		syscall.Handle(fd),
-		IPPROTO_SCTP,
-		SCTP_EVENTS,
-		(*byte)(unsafe.Pointer(&event)),
-		int32(unsafe.Sizeof(event)))
+		ipprotoSctp,
+		int32(opt),
+		(*byte)(p),
+		int32(l))
+
 }
 
 func sockOpen() (int, error) {
-	sock, e := syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, IPPROTO_SCTP)
+	sock, e := syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, ipprotoSctp)
 	return int(sock), e
 }
 
@@ -157,7 +171,7 @@ func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
 		uintptr(fd),
 		uintptr(unsafe.Pointer(&addr[0])),
 		uintptr(len(addr)),
-		SCTP_BINDX_ADD_ADDR)
+		sctpBindxAddAddr)
 	if int(n) < 0 {
 		return e
 	}

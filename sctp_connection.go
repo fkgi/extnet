@@ -9,10 +9,12 @@ import (
 
 // SCTPConn is an implementation of the Conn interface for SCTP network connections.
 type SCTPConn struct {
-	l    *SCTPListener
-	id   assocT
-	r    *io.PipeReader
-	addr net.Addr
+	l      *SCTPListener
+	id     assocT
+	r      *io.PipeReader
+	addr   net.Addr
+	wdline time.Time
+	rdline *time.Timer
 }
 
 func (c *SCTPConn) Read(b []byte) (int, error) {
@@ -52,18 +54,27 @@ func (c *SCTPConn) RemoteAddr() net.Addr {
 	return c.addr
 }
 
-// SetDeadline implements the Conn SetDeadline method. *not implemented yet
-func (c *SCTPConn) SetDeadline(t time.Time) error {
-	return nil
+// SetDeadline implements the Conn SetDeadline method.
+func (c *SCTPConn) SetDeadline(t time.Time) (e error) {
+	e = c.SetReadDeadline(t)
+	if e != nil {
+		return
+	}
+	e = c.SetWriteDeadline(t)
+	return
 }
 
-// SetReadDeadline implements the Conn SetReadDeadline method. *not implemented yet
+// SetReadDeadline implements the Conn SetReadDeadline method.
 func (c *SCTPConn) SetReadDeadline(t time.Time) error {
+	c.rdline = time.AfterFunc(t.Sub(time.Now()), func() {
+		c.l.pipes[c.id].Write(nil)
+	})
 	return nil
 }
 
-// SetWriteDeadline implements the Conn SetWriteDeadline method. *not implemented yet
+// SetWriteDeadline implements the Conn SetWriteDeadline method.
 func (c *SCTPConn) SetWriteDeadline(t time.Time) error {
+	c.wdline = t
 	return nil
 }
 
