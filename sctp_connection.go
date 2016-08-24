@@ -66,9 +66,14 @@ func (c *SCTPConn) SetDeadline(t time.Time) (e error) {
 
 // SetReadDeadline implements the Conn SetReadDeadline method.
 func (c *SCTPConn) SetReadDeadline(t time.Time) error {
-	c.rdline = time.AfterFunc(t.Sub(time.Now()), func() {
-		c.l.pipes[c.id].Write(nil)
-	})
+	if c.rdline != nil {
+		c.rdline.Stop()
+	}
+	if !t.IsZero() {
+		c.rdline = time.AfterFunc(t.Sub(time.Now()), func() {
+			c.l.pipes[c.id].Close()
+		})
+	}
 	return nil
 }
 
