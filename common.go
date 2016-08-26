@@ -1,17 +1,14 @@
 package extnet
 
 import (
-	//	"errors"
 	"net"
-	//	"strconv"
-	//	"syscall"
 )
 
 const (
 	// RxBufferSize is network recieve queue size
 	RxBufferSize = 10240
-	// ListenBufferSize is accept queue size
-	ListenBufferSize = 65535
+	// BacklogSize is accept queue size
+	BacklogSize = 128
 	// MaxAddressCount is count of multi-homed IP address
 	MaxAddressCount = 10
 )

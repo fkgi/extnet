@@ -59,6 +59,7 @@ func (l *SCTPListener) Addr() net.Addr {
 
 // ListenSCTP announces on the SCTP address laddr and returns a SCTP listener.
 func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
+	// bind local address
 	sock, e := bindsocket(laddr)
 	if e != nil {
 		return nil, e
@@ -68,7 +69,8 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	e = sockListen(sock)
 	if e != nil {
 		sockClose(sock)
-		return nil, &net.OpError{Op: "listen", Net: "sctp", Source: laddr, Err: e}
+		return nil, &net.OpError{
+			Op: "listen", Net: "sctp", Source: laddr, Err: e}
 	}
 
 	// create listener
@@ -76,7 +78,7 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	l.sock = sock
 	l.addr = laddr
 	l.pipes = make(map[assocT]*io.PipeWriter)
-	l.accept = make(chan *SCTPConn, ListenBufferSize)
+	l.accept = make(chan *SCTPConn, BacklogSize)
 
 	// start reading buffer
 	go read(l)
@@ -104,7 +106,11 @@ func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 
 	// connect SCTP connection to raddr
 	_, e := sctpConnectx(l.sock, raddr.rawAddr())
-	return &net.OpError{Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr, Err: e}
+	if e != nil {
+		return &net.OpError{
+			Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr, Err: e}
+	}
+	return nil
 }
 
 type sctpTlv struct {
@@ -124,7 +130,6 @@ func read(l *SCTPListener) {
 		n, e := sctpRecvmsg(l.sock, buf, &info, &flag)
 		if e != nil {
 			if l.accept != nil {
-				log.Println("SCTP socket reading failed, socket will close: ", e.Error())
 				l.Close()
 			}
 			break

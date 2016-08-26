@@ -19,13 +19,14 @@ func ResolveSCTPAddr(str string) (*SCTPAddr, error) {
 	addr := &SCTPAddr{}
 
 	t := strings.Split(str, ":")
-	if len(t) < 2 {
+	if len(t) != 2 {
 		return nil, errors.New("invalid input")
 	}
 
 	// set IP address
-	addr.IP = make([]net.IP, len(t)-1)
-	for i, s := range t[0 : len(t)-1] {
+	a := strings.Split(t[0], ",")
+	addr.IP = make([]net.IP, len(a))
+	for i, s := range a {
 		addr.IP[i] = net.ParseIP(s)
 		if addr.IP[i] == nil {
 			return nil, errors.New("invalid input")
@@ -34,7 +35,7 @@ func ResolveSCTPAddr(str string) (*SCTPAddr, error) {
 
 	// set port
 	var e error
-	addr.Port, e = strconv.Atoi(t[len(t)-1])
+	addr.Port, e = strconv.Atoi(t[1])
 	return addr, e
 }
 

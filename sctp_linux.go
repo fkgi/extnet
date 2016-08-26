@@ -101,7 +101,7 @@ func sockOpen() (int, error) {
 }
 
 func sockListen(fd int) error {
-	return syscall.Listen(fd, ListenBufferSize)
+	return syscall.Listen(fd, BacklogSize)
 }
 
 func sockClose(fd int) error {
