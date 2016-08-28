@@ -3,22 +3,64 @@ package extnet
 import (
 	"io"
 	"net"
+	"sync"
 	"time"
 	"unsafe"
 )
 
 // SCTPConn is an implementation of the Conn interface for SCTP network connections.
 type SCTPConn struct {
-	l      *SCTPListener
-	id     assocT
-	r      *io.PipeReader
-	addr   net.Addr
+	l    *SCTPListener
+	id   assocT
+	addr net.Addr
+
+	buf []byte
+	win []byte
+	err error
+	lk  sync.Mutex
+	wt  sync.Cond
+
+	r *io.PipeReader
+
 	wdline time.Time
 	rdline *time.Timer
 }
 
+type notify struct {
+	size int
+}
+
+func (n notify) Error() string {
+	return "data buffer notification"
+}
+
 func (c *SCTPConn) Read(b []byte) (int, error) {
-	return c.r.Read(b)
+	c.lk.Lock()
+	defer c.lk.Unlock()
+
+	for {
+		if c.err != nil {
+			return 0, c.err
+		}
+		if len(c.win) != 0 {
+			break
+		}
+		c.wt.Wait()
+	}
+	n := copy(b, c.win)
+	c.win = c.win[n:]
+	return n, nil
+}
+
+func (c *SCTPConn) cache(b []byte) {
+	c.lk.Lock()
+	defer c.lk.Unlock()
+
+	if len(c.win) == 0 {
+		c.win = c.buf[:0]
+	}
+	c.win = append(c.win, b...)
+	c.wt.Signal()
 }
 
 func (c *SCTPConn) Write(b []byte) (int, error) {
