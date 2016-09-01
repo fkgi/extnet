@@ -1,6 +1,7 @@
 package extnet
 
 import (
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -18,49 +19,60 @@ type SCTPConn struct {
 	win []byte
 	err error
 	lk  sync.Mutex
+	rlk sync.Mutex
+	wlk sync.Mutex
 	wt  sync.Cond
-
-	r *io.PipeReader
 
 	wdline time.Time
 	rdline *time.Timer
 }
 
-type notify struct {
-	size int
-}
-
-func (n notify) Error() string {
-	return "data buffer notification"
-}
-
 func (c *SCTPConn) Read(b []byte) (int, error) {
+	c.rlk.Lock()
+	defer c.rlk.Unlock()
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
 	for {
-		if c.err != nil {
-			return 0, c.err
-		}
 		if len(c.win) != 0 {
-			break
+			n := copy(b, c.win)
+			c.win = c.win[n:]
+			return n, nil
+		}
+		if c.err != nil {
+			e := c.err
+			if e != io.EOF {
+				c.err = nil
+			}
+			return 0, e
 		}
 		c.wt.Wait()
 	}
-	n := copy(b, c.win)
-	c.win = c.win[n:]
-	return n, nil
 }
 
-func (c *SCTPConn) cache(b []byte) {
+func (c *SCTPConn) queue(b []byte, e error) error {
+	c.wlk.Lock()
+	defer c.wlk.Unlock()
 	c.lk.Lock()
 	defer c.lk.Unlock()
 
-	if len(c.win) == 0 {
-		c.win = c.buf[:0]
+	if e == io.EOF {
+		return e
 	}
-	c.win = append(c.win, b...)
+
+	if e != nil {
+		c.err = e
+	}
+	if b != nil {
+		if len(c.win) == 0 {
+			c.win = append(c.buf, b...)
+		} else {
+			c.win = append(c.win, b...)
+		}
+	}
+
 	c.wt.Signal()
+	return nil
 }
 
 func (c *SCTPConn) Write(b []byte) (int, error) {
@@ -81,6 +93,9 @@ func (c *SCTPConn) Abort(reason string) error {
 
 func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
 	info := sndrcvInfo{}
+	if !c.wdline.IsZero() {
+		info.timetolive = uint32(c.wdline.Sub(time.Now()))
+	}
 	info.flags = flag
 	info.assocID = c.id
 	return sctpSend(c.l.sock, b, &info, 0)
@@ -111,9 +126,12 @@ func (c *SCTPConn) SetReadDeadline(t time.Time) error {
 	if c.rdline != nil {
 		c.rdline.Stop()
 	}
-	if !t.IsZero() {
+	if t.IsZero() {
+		c.rdline = nil
+	} else {
 		c.rdline = time.AfterFunc(t.Sub(time.Now()), func() {
-			c.l.pipes[c.id].Close()
+			c.queue(nil, &SctpError{timeout: true,
+				Err: errors.New("read timeout")})
 		})
 	}
 	return nil

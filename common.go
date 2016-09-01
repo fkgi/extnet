@@ -51,3 +51,21 @@ func bindsocket(laddr *SCTPAddr) (int, error) {
 	}
 	return sock, nil
 }
+
+// SctpError is the erro type returned by SCTP functions.
+type SctpError struct {
+	timeout bool
+	Err     error
+}
+
+func (e *SctpError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return e.Err.Error()
+}
+
+// Timeout indicate timeout is occured.
+func (e *SctpError) Timeout() bool {
+	return e.timeout
+}

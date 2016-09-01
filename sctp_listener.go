@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 	"unsafe"
 )
 
@@ -203,8 +204,19 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 		c := &(SCTPConn{})
 		c.l = l
 		c.id = change.assocID
-		c.r, l.pipes[change.assocID] = io.Pipe()
 		c.addr = resolveFromRawAddr(addr)
+
+		c.buf = make([]byte, 0, RxBufferSize)
+		c.win = c.buf
+		c.err = nil
+		//c.lk = new(sync.Mutex)
+		//c.rlk = new(sync.Mutex)
+		//c.wlk = new(sync.Mutex)
+		//c.wt = sync.NewCond(c.lk)
+		c.wt.L = &c.lk
+
+		c.wdline = time.Time{}
+		c.rdline = nil
 
 		if l.accept != nil {
 			l.accept <- c
