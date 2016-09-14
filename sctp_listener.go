@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
 	"unsafe"
 )
 
@@ -13,7 +12,7 @@ import (
 type SCTPListener struct {
 	sock   int
 	addr   net.Addr
-	pipes  map[assocT]*io.PipeWriter
+	con    map[assocT]*SCTPConn
 	accept chan *SCTPConn
 }
 
@@ -46,8 +45,8 @@ func (l *SCTPListener) Close() (e error) {
 	l.accept = nil
 	close(t)
 
-	for _, w := range l.pipes {
-		w.CloseWithError(nil)
+	for _, c := range l.con {
+		c.queue(nil, io.EOF)
 	}
 
 	return sockClose(s)
@@ -78,7 +77,7 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	l := &SCTPListener{}
 	l.sock = sock
 	l.addr = laddr
-	l.pipes = make(map[assocT]*io.PipeWriter)
+	l.con = make(map[assocT]*SCTPConn)
 	l.accept = make(chan *SCTPConn, BacklogSize)
 
 	// start reading buffer
@@ -166,8 +165,8 @@ func read(l *SCTPListener) {
 		} else {
 			log.Println("[data:", int(info.assocID))
 			// matching exist connection
-			if p, ok := l.pipes[info.assocID]; ok {
-				p.Write(buf[:n])
+			if p, ok := l.con[info.assocID]; ok {
+				p.queue(buf[:n], nil)
 			}
 		}
 	}
@@ -191,7 +190,7 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 	case sctpCommUp:
 		log.Println("[assoc change (comm up):", change.assocID)
 
-		if _, ok := l.pipes[change.assocID]; ok {
+		if _, ok := l.con[change.assocID]; ok {
 			return errors.New("add association failed, assoc_id exist")
 		}
 
@@ -208,15 +207,7 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 
 		c.buf = make([]byte, 0, RxBufferSize)
 		c.win = c.buf
-		c.err = nil
-		//c.lk = new(sync.Mutex)
-		//c.rlk = new(sync.Mutex)
-		//c.wlk = new(sync.Mutex)
-		//c.wt = sync.NewCond(c.lk)
-		c.wt.L = &c.lk
-
-		c.wdline = time.Time{}
-		c.rdline = nil
+		c.wc.L = &c.m
 
 		if l.accept != nil {
 			l.accept <- c
@@ -228,12 +219,12 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 			log.Println("[assoc change (shutdown comp):", change.assocID)
 		}
 
-		w, ok := l.pipes[change.assocID]
-		if !ok {
+		if c, ok := l.con[change.assocID]; ok {
+			delete(l.con, change.assocID)
+			c.queue(nil, io.EOF)
+		} else {
 			return errors.New("remove association failed, assoc_id not found")
 		}
-		delete(l.pipes, change.assocID)
-		w.Close()
 
 		if change.state == sctpCommLost {
 			return errors.New("association lost")

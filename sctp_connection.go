@@ -15,63 +15,78 @@ type SCTPConn struct {
 	id   assocT
 	addr net.Addr
 
-	buf []byte
-	win []byte
-	err error
-	lk  sync.Mutex
-	rlk sync.Mutex
-	wlk sync.Mutex
-	wt  sync.Cond
+	buf, win []byte
+	err      error
 
-	wdline time.Time
-	rdline *time.Timer
+	m, rm, wm sync.Mutex
+	wc        sync.Cond
+
+	wd, rd time.Time
 }
 
-func (c *SCTPConn) Read(b []byte) (int, error) {
-	c.rlk.Lock()
-	defer c.rlk.Unlock()
-	c.lk.Lock()
-	defer c.lk.Unlock()
+func (c *SCTPConn) Read(b []byte) (n int, e error) {
+	c.rm.Lock()
+	defer c.rm.Unlock()
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	var t *time.Timer
+	if now := time.Now(); !c.rd.IsZero() && now.Before(c.rd) {
+		t = time.AfterFunc(c.rd.Sub(now), func() {
+			er := &SctpError{timeout: true, Err: errors.New("read timeout")}
+			c.queue(nil, er)
+		})
+	}
 
 	for {
 		if len(c.win) != 0 {
-			n := copy(b, c.win)
+			n = copy(b, c.win)
 			c.win = c.win[n:]
-			return n, nil
+			break
 		}
 		if c.err != nil {
-			e := c.err
+			e = c.err
 			if e != io.EOF {
 				c.err = nil
 			}
-			return 0, e
+			break
 		}
-		c.wt.Wait()
+		c.wc.Wait()
 	}
+
+	if t != nil {
+		t.Stop()
+	}
+	return
 }
 
 func (c *SCTPConn) queue(b []byte, e error) error {
-	c.wlk.Lock()
-	defer c.wlk.Unlock()
-	c.lk.Lock()
-	defer c.lk.Unlock()
-
-	if e == io.EOF {
-		return e
+	if c.err == io.EOF {
+		return c.err
 	}
 
-	if e != nil {
-		c.err = e
-	}
+	c.wm.Lock()
+	defer c.wm.Unlock()
+
 	if b != nil {
+		c.m.Lock()
+		defer c.m.Unlock()
+
 		if len(c.win) == 0 {
 			c.win = append(c.buf, b...)
 		} else {
 			c.win = append(c.win, b...)
 		}
+		c.wc.Signal()
 	}
 
-	c.wt.Signal()
+	if e != nil {
+		c.m.Lock()
+		defer c.m.Unlock()
+
+		c.err = e
+		c.wc.Signal()
+	}
 	return nil
 }
 
@@ -93,8 +108,8 @@ func (c *SCTPConn) Abort(reason string) error {
 
 func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
 	info := sndrcvInfo{}
-	if !c.wdline.IsZero() {
-		info.timetolive = uint32(c.wdline.Sub(time.Now()))
+	if n := time.Now(); !c.wd.IsZero() && n.Before(c.wd) {
+		info.timetolive = uint32(c.wd.Sub(n))
 	}
 	info.flags = flag
 	info.assocID = c.id
@@ -123,23 +138,13 @@ func (c *SCTPConn) SetDeadline(t time.Time) (e error) {
 
 // SetReadDeadline implements the Conn SetReadDeadline method.
 func (c *SCTPConn) SetReadDeadline(t time.Time) error {
-	if c.rdline != nil {
-		c.rdline.Stop()
-	}
-	if t.IsZero() {
-		c.rdline = nil
-	} else {
-		c.rdline = time.AfterFunc(t.Sub(time.Now()), func() {
-			c.queue(nil, &SctpError{timeout: true,
-				Err: errors.New("read timeout")})
-		})
-	}
+	c.rd = t
 	return nil
 }
 
 // SetWriteDeadline implements the Conn SetWriteDeadline method.
 func (c *SCTPConn) SetWriteDeadline(t time.Time) error {
-	c.wdline = t
+	c.wd = t
 	return nil
 }
 
@@ -154,7 +159,7 @@ func DialSCTP(laddr, raddr *SCTPAddr) (c *SCTPConn, e error) {
 	l := &SCTPListener{}
 	l.sock = sock
 	l.addr = laddr
-	l.pipes = make(map[assocT]*io.PipeWriter)
+	l.con = make(map[assocT]*SCTPConn)
 	l.accept = make(chan *SCTPConn, 1)
 
 	// start reading buffer
