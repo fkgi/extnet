@@ -12,20 +12,23 @@ func main() {
 
 	log.Println("starting simple echo server")
 	// get option flag
-	ip := flag.String("a", "127.0.0.1", "bind IP address")
+	ip := flag.String("a", "10.255.24.102", "bind IP address")
 	pt := flag.String("p", "10001", "bind port number")
 	flag.Parse()
 
+	log.Println("crreate address")
 	addr, e := extnet.ResolveSCTPAddr(*ip + ":" + *pt)
 	if e != nil {
 		log.Fatal(e)
 	}
 
+	log.Println("listening")
 	l, e := extnet.ListenSCTP(addr)
 	if e != nil {
 		log.Fatal(e)
 	}
 
+	log.Println(l.Addr())
 	for {
 		c, e := l.AcceptSCTP()
 		if e != nil {

@@ -44,7 +44,8 @@ func (a *SCTPAddr) rawAddr() []syscall.RawSockaddrInet4 {
 	for n, i := range a.IP {
 		i = i.To4()
 		addr[n].Family = syscall.AF_INET
-		addr[n].Port = uint16(a.Port)
+		addr[n].Port = uint16(a.Port<<8) & 0xff00
+		addr[n].Port |= uint16(a.Port>>8) & 0x00ff
 		addr[n].Addr = [4]byte{i[0], i[1], i[2], i[3]}
 	}
 	return addr
