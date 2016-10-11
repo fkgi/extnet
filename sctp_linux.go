@@ -165,7 +165,7 @@ func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
 	return int(n), nil
 }
 
-func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
+func sctpGetladdrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
 	addr := make([]syscall.RawSockaddrInet4, MaxAddressCount)
 	n, e := C.sctp_getladdrs(
 		C.int(fd),
@@ -183,33 +183,24 @@ func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
 	return r, nil
 }
 
-func sctpGetpaddrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
-	println("1")
-	// addr := make([]syscall.RawSockaddrInet4, MaxAddressCount)
+func sctpGetpaddrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
 	var addr unsafe.Pointer
-	println("2")
 	n, e := C.sctp_getpaddrs(
 		C.int(fd),
 		C.sctp_assoc_t(id),
-		// C.sctp_assoc_t(C.int(id)),
-		// (**C.struct_sockaddr)(unsafe.Pointer(&addr)))
 		(**C.struct_sockaddr)(unsafe.Pointer(&addr)))
-	println("3")
 	if int(n) <= 0 {
 		return nil, e
 	}
-	println("4")
+
 	println((*(*syscall.RawSockaddrInet4)(addr)).Port)
+	println((*(*syscall.RawSockaddrInet4)(unsafe.Pointer(uintptr(addr) + uintptr(16)))).Port)
+
 	r := make([]syscall.RawSockaddrInet4, int(n))
-	a := (*[]syscall.RawSockaddrInet4)(addr)
 	for i := range r {
-		// r[i] = addr[i]
-		r[i] = (*a)[i]
+		r[i] = *(*syscall.RawSockaddrInet4)(unsafe.Pointer(uintptr(addr) + uintptr(16*i)))
 	}
-	println("5")
-	// C.sctp_freepaddrs((*C.struct_sockaddr)(unsafe.Pointer(&addr[0])))
 	C.sctp_freepaddrs((*C.struct_sockaddr)(addr))
 
-	println("6")
 	return r, nil
 }

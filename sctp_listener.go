@@ -194,7 +194,7 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 			return errors.New("add association failed, assoc_id exist")
 		}
 
-		addr, e := sctpGetpaddrs(l.sock, int(change.assocID))
+		addr, e := sctpGetpaddrs(l.sock, change.assocID)
 		if e != nil {
 			return e
 		}

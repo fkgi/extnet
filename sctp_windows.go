@@ -223,7 +223,7 @@ func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
 	return int(n), nil
 }
 
-func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
+func sctpGetladdrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
 	addr := make([]syscall.RawSockaddrInet4, 100)
 	n, _, e := fsctpGetladdrs.Call(
 		uintptr(fd),
@@ -238,7 +238,7 @@ func sctpGetladdrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
 	return r, nil
 }
 
-func sctpGetpaddrs(fd int, id int) ([]syscall.RawSockaddrInet4, error) {
+func sctpGetpaddrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
 	addr := make([]syscall.RawSockaddrInet4, 100)
 	n, _, e := fsctpGetpaddrs.Call(
 		uintptr(fd),
