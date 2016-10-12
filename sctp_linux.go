@@ -4,12 +4,7 @@ package extnet
 #cgo CFLAGS: -Wall
 #cgo LDFLAGS: -lsctp
 
-#include <unistd.h>
-#include <stdio.h>
-#include <netinet/in.h>
 #include <netinet/sctp.h>
-#include <arpa/inet.h>
-
 */
 import "C"
 
@@ -108,11 +103,11 @@ func sockClose(fd int) error {
 	return syscall.Close(fd)
 }
 
-func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
+func sctpBindx(fd int, ptr unsafe.Pointer, l int) error {
 	n, e := C.sctp_bindx(
 		C.int(fd),
-		(*C.struct_sockaddr)(unsafe.Pointer(&addr[0])),
-		C.int(len(addr)),
+		(*C.struct_sockaddr)(ptr),
+		C.int(l),
 		C.SCTP_BINDX_ADD_ADDR)
 	if int(n) < 0 {
 		return e
@@ -120,12 +115,12 @@ func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
 	return nil
 }
 
-func sctpConnectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
+func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (int, error) {
 	t := 0
 	n, e := C.sctp_connectx(
 		C.int(fd),
-		(*C.struct_sockaddr)(unsafe.Pointer(&addr[0])),
-		C.int(len(addr)),
+		(*C.struct_sockaddr)(ptr),
+		C.int(l),
 		(*C.sctp_assoc_t)(unsafe.Pointer(&t)))
 	if int(n) < 0 {
 		return 0, e
@@ -165,42 +160,34 @@ func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
 	return int(n), nil
 }
 
-func sctpGetladdrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
-	addr := make([]syscall.RawSockaddrInet4, MaxAddressCount)
+func sctpGetladdrs(fd int, id assocT) (unsafe.Pointer, int, error) {
+	var addr unsafe.Pointer
 	n, e := C.sctp_getladdrs(
 		C.int(fd),
 		C.sctp_assoc_t(id),
 		(**C.struct_sockaddr)(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
-		return nil, e
+		return nil, int(n), e
 	}
-	r := make([]syscall.RawSockaddrInet4, int(n))
-	for i := range r {
-		r[i] = addr[i]
-	}
-	C.sctp_freeladdrs((*C.struct_sockaddr)(unsafe.Pointer(&addr[0])))
-
-	return r, nil
+	return addr, int(n), nil
 }
 
-func sctpGetpaddrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
+func sctpFreeladdrs(addr unsafe.Pointer) {
+	C.sctp_freeladdrs((*C.struct_sockaddr)(addr))
+}
+
+func sctpGetpaddrs(fd int, id assocT) (unsafe.Pointer, int, error) {
 	var addr unsafe.Pointer
 	n, e := C.sctp_getpaddrs(
 		C.int(fd),
 		C.sctp_assoc_t(id),
 		(**C.struct_sockaddr)(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
-		return nil, e
+		return nil, int(n), e
 	}
+	return addr, int(n), nil
+}
 
-	println((*(*syscall.RawSockaddrInet4)(addr)).Port)
-	println((*(*syscall.RawSockaddrInet4)(unsafe.Pointer(uintptr(addr) + uintptr(16)))).Port)
-
-	r := make([]syscall.RawSockaddrInet4, int(n))
-	for i := range r {
-		r[i] = *(*syscall.RawSockaddrInet4)(unsafe.Pointer(uintptr(addr) + uintptr(16*i)))
-	}
+func sctpFreepaddrs(addr unsafe.Pointer) {
 	C.sctp_freepaddrs((*C.struct_sockaddr)(addr))
-
-	return r, nil
 }

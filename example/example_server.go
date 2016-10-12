@@ -14,7 +14,7 @@ func (l *ipList) String() string {
 }
 
 func (l *ipList) Set(s string) error {
-	*l = ipList(string(*l) + "," + s)
+	*l = ipList(string(*l) + "/" + s)
 	return nil
 }
 
@@ -29,25 +29,25 @@ func main() {
 	flag.Parse()
 
 	if len(ips) == 0 {
-		log.Fatal("no IP address")
+		log.Fatal("ERROR: no IP address")
 	}
 
-	log.Println("crreate address")
+	log.Print("creating address...")
 	addr, e := extnet.ResolveSCTPAddr(string(ips)[1:] + ":" + *pt)
 	if e != nil {
 		log.Fatal(e)
 	}
-	log.Println("address is " + addr.String())
+	log.Print("success as ", addr)
 
-	log.Println("listen")
+	log.Print("starting listen... ")
 	l, e := extnet.ListenSCTP(addr)
 	if e != nil {
 		log.Fatal(e)
 	}
-	log.Println("listening on " + l.Addr().String())
+	log.Print("success on ", l.Addr())
 
 	for {
-		log.Println("accept")
+		log.Print("accepting...")
 		c, e := l.AcceptSCTP()
 		if e != nil {
 			log.Println(e)
@@ -55,29 +55,32 @@ func main() {
 		}
 
 		go func(c *extnet.SCTPConn) {
-			log.Println("new connection")
-			log.Println("local:" + c.LocalAddr().String())
-			log.Println("remote:" + c.RemoteAddr().String())
+			log.Print("new connection is available")
+			log.Print(" local : ", c.LocalAddr())
+			log.Print(" remote: ", c.RemoteAddr())
 
 			buf := make([]byte, 1024)
-			log.Println("read")
+			log.Print("reading...")
 			n, e := c.Read(buf)
 			if e != nil {
-				log.Println(e)
+				log.Print("ERROR:", e)
 				c.Close()
 				return
 			}
-			log.Println(n)
-			log.Println(buf[:n])
+			log.Print("success as \"", string(buf[:n]), "\", length is ", n)
 
-			log.Panicln("write")
-			_, e = c.Write(buf)
+			log.Print("writing...")
+			_, e = c.Write(buf[:n])
 			if e != nil {
-				log.Println(e)
+				log.Print("ERROR: ", e)
 			}
 
-			log.Panicln("close")
+			log.Print("closing...")
 			c.Close()
+			if e != nil {
+				log.Print("ERROR: ", e)
+			}
+			log.Print("success")
 		}(c)
 	}
 }

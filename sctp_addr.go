@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"unsafe"
 )
 
 // SCTPAddr represents the address of a SCTP end point.
@@ -24,7 +25,7 @@ func ResolveSCTPAddr(str string) (*SCTPAddr, error) {
 	}
 
 	// set IP address
-	a := strings.Split(t[0], ",")
+	a := strings.Split(t[0], "/")
 	addr.IP = make([]net.IP, len(a))
 	for i, s := range a {
 		addr.IP[i] = net.ParseIP(s)
@@ -39,34 +40,38 @@ func ResolveSCTPAddr(str string) (*SCTPAddr, error) {
 	return addr, e
 }
 
-func (a *SCTPAddr) rawAddr() []syscall.RawSockaddrInet4 {
+func (a *SCTPAddr) rawAddr() (unsafe.Pointer, int) {
 	addr := make([]syscall.RawSockaddrInet4, len(a.IP))
+	p := uint16(a.Port<<8) & 0xff00
+	p |= uint16(a.Port>>8) & 0x00ff
 	for n, i := range a.IP {
 		i = i.To4()
 		addr[n].Family = syscall.AF_INET
-		addr[n].Port = uint16(a.Port<<8) & 0xff00
-		addr[n].Port |= uint16(a.Port>>8) & 0x00ff
+		addr[n].Port = p
 		addr[n].Addr = [4]byte{i[0], i[1], i[2], i[3]}
 	}
-	return addr
+	return unsafe.Pointer(&addr[0]), len(a.IP)
 }
 
-func resolveFromRawAddr(addr []syscall.RawSockaddrInet4) *SCTPAddr {
-	raddr := &SCTPAddr{}
-	raddr.Port = int(addr[0].Port)
-	raddr.IP = make([]net.IP, len(addr))
-	for n, i := range addr {
-		raddr.IP[n] = net.IPv4(i.Addr[0], i.Addr[1], i.Addr[2], i.Addr[3])
+func resolveFromRawAddr(ptr unsafe.Pointer, n int) *SCTPAddr {
+	addr := &SCTPAddr{}
+	p := int((*(*syscall.RawSockaddrInet4)(ptr)).Port)
+	addr.Port = (p & 0xff) << 8
+	addr.Port |= (p & 0xff00) >> 8
+	addr.IP = make([]net.IP, n)
+	for i := 0; i < n; i++ {
+		a := *(*syscall.RawSockaddrInet4)(unsafe.Pointer(uintptr(ptr) + uintptr(16*i)))
+		addr.IP[i] = net.IPv4(a.Addr[0], a.Addr[1], a.Addr[2], a.Addr[3])
 	}
-	return raddr
+	return addr
 }
 
 func (a *SCTPAddr) String() (s string) {
 	for _, i := range a.IP {
 		s += i.String()
-		s += ":"
+		s += "/"
 	}
-	s += strconv.Itoa(a.Port)
+	s = s[:len(s)-1] + ":" + strconv.Itoa(a.Port)
 	return
 }
 
@@ -74,28 +79,3 @@ func (a *SCTPAddr) String() (s string) {
 func (a *SCTPAddr) Network() string {
 	return "sctp"
 }
-
-/*
-func (a *SCTPAddr) Equals(addr Addr) bool {
-	b, ok := addr.(*SCTPAddr)
-	if !ok {
-		return false
-	}
-	if a.Port != b.Port {
-		return false
-	}
-	if len(a.IP) != len(b.IP) {
-		return false
-	}
-aAddr:
-	for _, i := range a.IP {
-		for _, j := range b.IP {
-			if i.Equal(j) {
-				continue aAddr
-			}
-		}
-		return false
-	}
-	return true
-}
-*/

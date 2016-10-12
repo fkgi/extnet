@@ -11,9 +11,8 @@ import (
 
 // SCTPConn is an implementation of the Conn interface for SCTP network connections.
 type SCTPConn struct {
-	l    *SCTPListener
-	id   assocT
-	addr net.Addr
+	l  *SCTPListener
+	id assocT
 
 	buf, win []byte
 	err      error
@@ -118,12 +117,24 @@ func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
 
 // LocalAddr returns the local network address.
 func (c *SCTPConn) LocalAddr() net.Addr {
-	return c.l.addr
+	ptr, n, e := sctpGetladdrs(c.l.sock, c.id)
+	if e != nil {
+		return nil
+	}
+	defer sctpFreeladdrs(ptr)
+
+	return resolveFromRawAddr(ptr, n)
 }
 
 // RemoteAddr returns the remote network address.
 func (c *SCTPConn) RemoteAddr() net.Addr {
-	return c.addr
+	ptr, n, e := sctpGetpaddrs(c.l.sock, c.id)
+	if e != nil {
+		return nil
+	}
+	defer sctpFreepaddrs(ptr)
+
+	return resolveFromRawAddr(ptr, n)
 }
 
 // SetDeadline implements the Conn SetDeadline method.
@@ -158,7 +169,6 @@ func DialSCTP(laddr, raddr *SCTPAddr) (c *SCTPConn, e error) {
 	// create listener
 	l := &SCTPListener{}
 	l.sock = sock
-	l.addr = laddr
 	l.con = make(map[assocT]*SCTPConn)
 	l.accept = make(chan *SCTPConn, 1)
 

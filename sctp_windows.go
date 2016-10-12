@@ -166,11 +166,11 @@ func sockClose(fd int) error {
 	return e2
 }
 
-func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
+func sctpBindx(fd int, ptr unsafe.Pointer, l int) error {
 	n, _, e := fsctpBindx.Call(
 		uintptr(fd),
-		uintptr(unsafe.Pointer(&addr[0])),
-		uintptr(len(addr)),
+		uintptr(ptr),
+		uintptr(l),
 		sctpBindxAddAddr)
 	if int(n) < 0 {
 		return e
@@ -178,12 +178,12 @@ func sctpBindx(fd int, addr []syscall.RawSockaddrInet4) error {
 	return nil
 }
 
-func sctpConnectx(fd int, addr []syscall.RawSockaddrInet4) (int, error) {
+func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (int, error) {
 	t := 0
 	n, _, e := fsctpConnectx.Call(
 		uintptr(fd),
-		uintptr(unsafe.Pointer(&addr[0])),
-		uintptr(len(addr)),
+		uintptr(ptr),
+		uintptr(l),
 		uintptr(unsafe.Pointer(&t)))
 	if int(n) < 0 {
 		return 0, e
@@ -223,32 +223,34 @@ func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {
 	return int(n), nil
 }
 
-func sctpGetladdrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
-	addr := make([]syscall.RawSockaddrInet4, 100)
+func sctpGetladdrs(fd int, id assocT) (unsafe.Pointer, int, error) {
+	var addr unsafe.Pointer
 	n, _, e := fsctpGetladdrs.Call(
 		uintptr(fd),
 		uintptr(id),
 		uintptr(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
-		return nil, e
+		return nil, int(n), e
 	}
-	r := addr[:int(n)]
-	fsctpFreeladdrs.Call(uintptr(unsafe.Pointer(&addr[0])))
-
-	return r, nil
+	return addr, int(n), nil
 }
 
-func sctpGetpaddrs(fd int, id assocT) ([]syscall.RawSockaddrInet4, error) {
-	addr := make([]syscall.RawSockaddrInet4, 100)
+func sctpFreeladdrs(addr unsafe.Pointer) {
+	fsctpFreeladdrs.Call(uintptr(addr))
+}
+
+func sctpGetpaddrs(fd int, id assocT) (unsafe.Pointer, int, error) {
+	var addr unsafe.Pointer
 	n, _, e := fsctpGetpaddrs.Call(
 		uintptr(fd),
 		uintptr(id),
 		uintptr(unsafe.Pointer(&addr)))
 	if int(n) <= 0 {
-		return nil, e
+		return nil, int(n), e
 	}
-	r := addr[:int(n)]
-	fsctpFreepaddrs.Call(uintptr(unsafe.Pointer(&addr[0])))
+	return addr, int(n), nil
+}
 
-	return r, nil
+func sctpFreepaddrs(addr unsafe.Pointer) {
+	fsctpFreepaddrs.Call(uintptr(addr))
 }

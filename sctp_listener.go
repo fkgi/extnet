@@ -11,7 +11,6 @@ import (
 // SCTPListener is a SCTP network listener.
 type SCTPListener struct {
 	sock   int
-	addr   net.Addr
 	con    map[assocT]*SCTPConn
 	accept chan *SCTPConn
 }
@@ -54,7 +53,13 @@ func (l *SCTPListener) Close() (e error) {
 
 // Addr returns the listener's network address, a *SCTPAddr.
 func (l *SCTPListener) Addr() net.Addr {
-	return l.addr
+	ptr, n, e := sctpGetladdrs(l.sock, 0)
+	if e != nil {
+		return nil
+	}
+	defer sctpFreeladdrs(ptr)
+
+	return resolveFromRawAddr(ptr, n)
 }
 
 // ListenSCTP announces on the SCTP address laddr and returns a SCTP listener.
@@ -76,7 +81,6 @@ func ListenSCTP(laddr *SCTPAddr) (*SCTPListener, error) {
 	// create listener
 	l := &SCTPListener{}
 	l.sock = sock
-	l.addr = laddr
 	l.con = make(map[assocT]*SCTPConn)
 	l.accept = make(chan *SCTPConn, BacklogSize)
 
@@ -91,8 +95,9 @@ func (l *SCTPListener) Connect(addr net.Addr) error {
 	if a, ok := addr.(*SCTPAddr); ok {
 		return l.ConnectSCTP(a)
 	}
+	laddr := l.Addr()
 	return &net.OpError{
-		Op: "connect", Net: "sctp", Source: l.addr, Addr: addr,
+		Op: "connect", Net: "sctp", Source: laddr, Addr: addr,
 		Err: errors.New("invalid Addr, not SCTPAddr")}
 }
 
@@ -100,15 +105,16 @@ func (l *SCTPListener) Connect(addr net.Addr) error {
 func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 	if l.sock == -1 {
 		return &net.OpError{
-			Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr,
+			Op: "connect", Net: "sctp", Source: l.Addr(), Addr: raddr,
 			Err: errors.New("socket is closed")}
 	}
 
 	// connect SCTP connection to raddr
-	_, e := sctpConnectx(l.sock, raddr.rawAddr())
+	ptr, n := raddr.rawAddr()
+	_, e := sctpConnectx(l.sock, ptr, n)
 	if e != nil {
 		return &net.OpError{
-			Op: "connect", Net: "sctp", Source: l.addr, Addr: raddr, Err: e}
+			Op: "connect", Net: "sctp", Source: l.Addr(), Addr: raddr, Err: e}
 	}
 	return nil
 }
@@ -167,6 +173,8 @@ func read(l *SCTPListener) {
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
 				p.queue(buf[:n], nil)
+			} else {
+				log.Println("available connection not found")
 			}
 		}
 	}
@@ -194,20 +202,16 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 			return errors.New("add association failed, assoc_id exist")
 		}
 
-		addr, e := sctpGetpaddrs(l.sock, change.assocID)
-		if e != nil {
-			return e
-		}
-
 		// create new connection
 		c := &(SCTPConn{})
 		c.l = l
 		c.id = change.assocID
-		c.addr = resolveFromRawAddr(addr)
 
 		c.buf = make([]byte, 0, RxBufferSize)
 		c.win = c.buf
 		c.wc.L = &c.m
+
+		l.con[change.assocID] = c
 
 		if l.accept != nil {
 			l.accept <- c

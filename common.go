@@ -9,8 +9,6 @@ const (
 	RxBufferSize = 10240
 	// BacklogSize is accept queue size
 	BacklogSize = 128
-	// MaxAddressCount is count of multi-homed IP address
-	MaxAddressCount = 10
 )
 
 type sndrcvInfo struct {
@@ -43,7 +41,8 @@ func bindsocket(laddr *SCTPAddr) (int, error) {
 	}
 
 	// bind SCTP connection
-	e = sctpBindx(sock, laddr.rawAddr())
+	ptr, n := laddr.rawAddr()
+	e = sctpBindx(sock, ptr, n)
 	if e != nil {
 		e = &net.OpError{Op: "bindx", Net: "sctp", Addr: nil, Err: e}
 		sockClose(sock)
