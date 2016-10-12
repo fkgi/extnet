@@ -41,6 +41,13 @@ const (
 	sctpRestart      = 0x0003
 	sctpShutdownComp = 0x0004
 	sctpCantStrAssoc = 0x0005
+
+	sctpAddrAvailable   = 0x0001
+	sctpAddrUnreachable = 0x0002
+	sctpAddrRemoved     = 0x0003
+	sctpAddrAdded       = 0x0004
+	sctpAddrMadePrim    = 0x0005
+	sctpAddrConfirmed   = 0x0006
 )
 
 type assocT uint32

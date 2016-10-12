@@ -3,7 +3,6 @@ package extnet
 import (
 	"errors"
 	"io"
-	"log"
 	"net"
 	"unsafe"
 )
@@ -145,36 +144,31 @@ func read(l *SCTPListener) {
 		if flag&msgNotification == msgNotification {
 			tlv := (*sctpTlv)(unsafe.Pointer(&buf[0]))
 
-			e = error(nil)
 			switch tlv.snType {
 			case sctpAssocChange:
-				e = l.assocChangeNotify(buf[:n])
+				l.assocChangeNotify(buf[:n])
 			case sctpPeerAddrChange:
-				log.Println("[peer addr change:", int(info.assocID))
+				l.paddrChangeNotify(buf[:n])
 			case sctpSendFailed:
-				log.Println("[send failed:", int(info.assocID))
+				tracePrint("send failed", info.assocID)
 			case sctpRemoteError:
-				log.Println("[remote error:", int(info.assocID))
+				tracePrint("remote error", info.assocID)
 			case sctpShutdownEvent:
-				log.Println("[shutdown event:", int(info.assocID))
+				tracePrint("shutdown event", info.assocID)
 			case sctpPartialDeliveryEvent:
-				log.Println("[partial delivery:", int(info.assocID))
+				tracePrint("partial delivery", info.assocID)
 			case sctpAdaptationIndication:
-				log.Println("[adaptation indication:", int(info.assocID))
+				tracePrint("adaptation indication", info.assocID)
 			case sctpSenderDryEvent:
-				log.Println("[sender dry:", int(info.assocID))
-			}
-
-			if e != nil {
-				log.Println(e)
+				tracePrint("sender dry", info.assocID)
 			}
 		} else {
-			log.Println("[data:", int(info.assocID))
+			tracePrint("data", info.assocID)
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
 				p.queue(buf[:n], nil)
 			} else {
-				log.Println("available connection not found")
+				errorPrint("available connection not found", info.assocID)
 			}
 		}
 	}
@@ -191,74 +185,90 @@ type assocChange struct {
 	assocID         assocT
 }
 
-func (l *SCTPListener) assocChangeNotify(buf []byte) error {
-	change := (*assocChange)(unsafe.Pointer(&buf[0]))
+func (l *SCTPListener) assocChangeNotify(buf []byte) {
+	c := (*assocChange)(unsafe.Pointer(&buf[0]))
 
-	switch change.state {
+	switch c.state {
 	case sctpCommUp:
-		log.Println("[assoc change (comm up):", change.assocID)
+		tracePrint("assoc change (comm up)", c.assocID)
 
-		if _, ok := l.con[change.assocID]; ok {
-			return errors.New("add association failed, assoc_id exist")
+		if _, ok := l.con[c.assocID]; ok {
+			errorPrint("overwrite duplicate assoc id", c.assocID)
 		}
 
 		// create new connection
-		c := &(SCTPConn{})
-		c.l = l
-		c.id = change.assocID
+		con := &(SCTPConn{})
+		con.l = l
+		con.id = c.assocID
 
-		c.buf = make([]byte, 0, RxBufferSize)
-		c.win = c.buf
-		c.wc.L = &c.m
+		con.buf = make([]byte, 0, RxBufferSize)
+		con.win = con.buf
+		con.wc.L = &con.m
 
-		l.con[change.assocID] = c
+		l.con[c.assocID] = con
 
 		if l.accept != nil {
-			l.accept <- c
+			l.accept <- con
 		}
 	case sctpCommLost, sctpShutdownComp:
-		if change.state == sctpCommLost {
-			log.Println("[assoc change (comm lost):", change.assocID)
+		if c.state == sctpCommLost {
+			tracePrint("assoc change (comm lost)", c.assocID)
 		} else {
-			log.Println("[assoc change (shutdown comp):", change.assocID)
+			tracePrint("assoc change (shutdown comp)", c.assocID)
 		}
 
-		if c, ok := l.con[change.assocID]; ok {
-			delete(l.con, change.assocID)
-			c.queue(nil, io.EOF)
+		if con, ok := l.con[c.assocID]; ok {
+			delete(l.con, c.assocID)
+			con.queue(nil, io.EOF)
 		} else {
-			return errors.New("remove association failed, assoc_id not found")
-		}
-
-		if change.state == sctpCommLost {
-			return errors.New("association lost")
+			errorPrint("assoc id not found", c.assocID)
+			return
 		}
 	case sctpRestart:
-		log.Println("[assoc change (reset):", change.assocID)
+		tracePrint("assoc change (reset)", c.assocID)
 	case sctpCantStrAssoc:
-		log.Println("[assoc change (cant str assoc):", change.assocID)
+		tracePrint("assoc change (cant str assoc)", c.assocID)
 	}
-	return nil
+	return
+}
+
+type paddrChange struct {
+	chtype   uint16
+	flags    uint16
+	length   uint32
+	addr     sockaddrStorage
+	state    int
+	spcError int
+	assocID  assocT
+}
+
+type sockaddrStorage struct {
+	length uint8
+	family uint8
+	pad1   [6]byte
+	align  int64
+	pad2   [112]byte
+}
+
+func (l *SCTPListener) paddrChangeNotify(buf []byte) {
+	c := (*paddrChange)(unsafe.Pointer(&buf[0]))
+	switch c.state {
+	case sctpAddrAvailable:
+		tracePrint("peer addr change(addr available):", c.assocID)
+	case sctpAddrUnreachable:
+		tracePrint("peer addr change(addr unreachable):", c.assocID)
+	case sctpAddrRemoved:
+		tracePrint("peer addr change(addr removed):", c.assocID)
+	case sctpAddrAdded:
+		tracePrint("peer addr change(addr added):", c.assocID)
+	case sctpAddrMadePrim:
+		tracePrint("peer addr change(addr made prim):", c.assocID)
+	case sctpAddrConfirmed:
+		tracePrint("peer addr change(addr confirmed):", c.assocID)
+	}
 }
 
 /*
-	change := (*C.struct_sctp_paddr_change)(bufp)
-	info.sinfo_assoc_id = change.spc_assoc_id
-	switch change.spc_state {
-	case C.SCTP_ADDR_AVAILABLE:
-		// log.Println("[peer addr change(addr available):", int(change.spc_assoc_id))
-	case C.SCTP_ADDR_UNREACHABLE:
-		// log.Println("[peer addr change(addr unreachable):", int(change.spc_assoc_id))
-	case C.SCTP_ADDR_REMOVED:
-		// log.Println("[peer addr change(addr removed):", int(change.spc_assoc_id))
-	case C.SCTP_ADDR_ADDED:
-		// log.Println("[peer addr change(addr added):", int(change.spc_assoc_id))
-	case C.SCTP_ADDR_MADE_PRIM:
-		// log.Println("[peer addr change(addr made prim):", int(change.spc_assoc_id))
-	case C.SCTP_ADDR_CONFIRMED:
-		// log.Println("[peer addr change(addr confirmed):", int(change.spc_assoc_id))
-	}
-
 	change := (*C.struct_sctp_send_failed)(bufp)
 	info.sinfo_assoc_id = change.ssf_assoc_id
 	switch change.ssf_flags {
@@ -271,22 +281,6 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) error {
 	change := (*C.struct_sctp_remote_error)(bufp)
 	info.sinfo_assoc_id = change.sre_assoc_id
 	// log.Println("[remote error(", change.sre_error, ")", change.sre_assoc_id)
-
-	change := (*C.struct_sctp_shutdown_event)(bufp)
-	info.sinfo_assoc_id = change.sse_assoc_id
-	// log.Println("[shutdown event:", int(change.sse_assoc_id))
-
-	change := (*C.struct_sctp_pdapi_event)(bufp)
-	info.sinfo_assoc_id = change.pdapi_assoc_id
-	// log.Println("[partial delivery event:", int(change.pdapi_assoc_id))
-
-	change := (*C.struct_sctp_adaptation_event)(bufp)
-	info.sinfo_assoc_id = change.sai_assoc_id
-	// log.Println("[adaptation indication:", int(change.sai_assoc_id))
-
-	change := (*C.struct_sctp_sender_dry_event)(bufp)
-	info.sinfo_assoc_id = change.sender_dry_assoc_id
-	// log.Println("[sender dry event:", int(change.sender_dry_assoc_id))
 */
 
 type initmsg struct {

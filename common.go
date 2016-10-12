@@ -1,7 +1,9 @@
 package extnet
 
 import (
+	"log"
 	"net"
+	"os"
 )
 
 const (
@@ -9,6 +11,10 @@ const (
 	RxBufferSize = 10240
 	// BacklogSize is accept queue size
 	BacklogSize = 128
+)
+
+var (
+	trace *log.Logger
 )
 
 type sndrcvInfo struct {
@@ -49,6 +55,32 @@ func bindsocket(laddr *SCTPAddr) (int, error) {
 		return -1, e
 	}
 	return sock, nil
+}
+
+// TraceEnable enables trace log output
+func TraceEnable() {
+	trace = log.New(os.Stdout, "", log.Ltime|log.Lmicroseconds)
+	trace.Println("sctp | trace | assoc id | trace enabled")
+}
+
+// TraceDisable disables trace log output
+func TraceDisable() {
+	if trace != nil {
+		trace.Println("sctp | trace | assoc id | trace disabled")
+	}
+	trace = nil
+}
+
+func tracePrint(s interface{}, i assocT) {
+	if trace != nil {
+		trace.Println("sctp | trace |", i, "|", s)
+	}
+}
+
+func errorPrint(s interface{}, i assocT) {
+	if trace != nil {
+		trace.Println("sctp | error |", i, "|", s)
+	}
 }
 
 // SctpError is the erro type returned by SCTP functions.

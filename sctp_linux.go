@@ -43,6 +43,13 @@ const (
 	sctpShutdownComp = C.SCTP_SHUTDOWN_COMP
 	sctpCantStrAssoc = C.SCTP_CANT_STR_ASSOC
 
+	sctpAddrAvailable   = C.SCTP_ADDR_AVAILABLE
+	sctpAddrUnreachable = C.SCTP_ADDR_UNREACHABLE
+	sctpAddrRemoved     = C.SCTP_ADDR_REMOVED
+	sctpAddrAdded       = C.SCTP_ADDR_ADDED
+	sctpAddrMadePrim    = C.SCTP_ADDR_MADE_PRIM
+	sctpAddrConfirmed   = C.SCTP_ADDR_CONFIRMED
+
 	sctpInitMsg   = C.SCTP_INITMSG
 	sctpRtoInfo   = C.SCTP_RTOINFO
 	sctpAssocInfo = C.SCTP_ASSOCINFO

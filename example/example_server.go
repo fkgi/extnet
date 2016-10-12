@@ -20,6 +20,7 @@ func (l *ipList) Set(s string) error {
 
 func main() {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
+	extnet.TraceEnable()
 
 	log.Println("starting simple echo server")
 	// get option flag
