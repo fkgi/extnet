@@ -2,6 +2,7 @@ package extnet
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"unsafe"
@@ -150,25 +151,31 @@ func read(l *SCTPListener) {
 			case sctpPeerAddrChange:
 				l.paddrChangeNotify(buf[:n])
 			case sctpSendFailed:
-				tracePrint("send failed", info.assocID)
+				//tracePrint("send failed", info.assocID)
 			case sctpRemoteError:
-				tracePrint("remote error", info.assocID)
+				//tracePrint("remote error", info.assocID)
 			case sctpShutdownEvent:
-				tracePrint("shutdown event", info.assocID)
+				//tracePrint("shutdown event", info.assocID)
 			case sctpPartialDeliveryEvent:
-				tracePrint("partial delivery", info.assocID)
+				//tracePrint("partial delivery", info.assocID)
 			case sctpAdaptationIndication:
-				tracePrint("adaptation indication", info.assocID)
+				//tracePrint("adaptation indication", info.assocID)
 			case sctpSenderDryEvent:
-				tracePrint("sender dry", info.assocID)
+				//tracePrint("sender dry", info.assocID)
 			}
 		} else {
-			tracePrint("data", info.assocID)
+			if Notificator != nil {
+				Notificator(&SctpRecieveData{
+					ID: int(info.assocID),
+				})
+			}
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
 				p.queue(buf[:n], nil)
 			} else {
-				errorPrint("available connection not found", info.assocID)
+				panic(fmt.Sprintf(
+					"data recieved from unknown assoc id %d",
+					info.assocID))
 			}
 		}
 	}
@@ -190,10 +197,18 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 
 	switch c.state {
 	case sctpCommUp:
-		tracePrint("assoc change (comm up)", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpAssocUp{
+				ID:      int(c.assocID),
+				OStream: int(c.outboundStreams),
+				IStream: int(c.inboundStreams),
+			})
+		}
 
 		if _, ok := l.con[c.assocID]; ok {
-			errorPrint("overwrite duplicate assoc id", c.assocID)
+			panic(fmt.Sprintf(
+				"duplicate assoc id %d in new association notification",
+				c.assocID))
 		}
 
 		// create new connection
@@ -209,25 +224,47 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 
 		if l.accept != nil {
 			l.accept <- con
-		}
-	case sctpCommLost, sctpShutdownComp:
-		if c.state == sctpCommLost {
-			tracePrint("assoc change (comm lost)", c.assocID)
 		} else {
-			tracePrint("assoc change (shutdown comp)", c.assocID)
+			con.Abort("closed")
+		}
+	case sctpCommLost:
+		if Notificator != nil {
+			Notificator(&SctpAssocLost{
+				ID:  int(c.assocID),
+				Err: c.sacError,
+			})
 		}
 
 		if con, ok := l.con[c.assocID]; ok {
 			delete(l.con, c.assocID)
 			con.queue(nil, io.EOF)
-		} else {
-			errorPrint("assoc id not found", c.assocID)
-			return
+		}
+	case sctpShutdownComp:
+		if Notificator != nil {
+			Notificator(&SctpAssocShutdown{
+				ID: int(c.assocID),
+			})
+		}
+
+		if con, ok := l.con[c.assocID]; ok {
+			delete(l.con, c.assocID)
+			con.queue(nil, io.EOF)
 		}
 	case sctpRestart:
-		tracePrint("assoc change (reset)", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpAssocRestart{
+				ID:      int(c.assocID),
+				OStream: int(c.outboundStreams),
+				IStream: int(c.inboundStreams),
+			})
+		}
 	case sctpCantStrAssoc:
-		tracePrint("assoc change (cant str assoc)", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpAssocStartFail{
+				ID:  int(c.assocID),
+				Err: c.sacError,
+			})
+		}
 	}
 	return
 }
@@ -254,17 +291,43 @@ func (l *SCTPListener) paddrChangeNotify(buf []byte) {
 	c := (*paddrChange)(unsafe.Pointer(&buf[0]))
 	switch c.state {
 	case sctpAddrAvailable:
-		tracePrint("peer addr change(addr available):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrAvailable{
+				ID: int(c.assocID),
+			})
+		}
 	case sctpAddrUnreachable:
-		tracePrint("peer addr change(addr unreachable):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrUnreachable{
+				ID:  int(c.assocID),
+				Err: c.spcError,
+			})
+		}
 	case sctpAddrRemoved:
-		tracePrint("peer addr change(addr removed):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrRemoved{
+				ID:  int(c.assocID),
+				Err: c.spcError,
+			})
+		}
 	case sctpAddrAdded:
-		tracePrint("peer addr change(addr added):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrAdded{
+				ID: int(c.assocID),
+			})
+		}
 	case sctpAddrMadePrim:
-		tracePrint("peer addr change(addr made prim):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrMadePrim{
+				ID: int(c.assocID),
+			})
+		}
 	case sctpAddrConfirmed:
-		tracePrint("peer addr change(addr confirmed):", c.assocID)
+		if Notificator != nil {
+			Notificator(&SctpPeerAddrConfirmed{
+				ID: int(c.assocID),
+			})
+		}
 	}
 }
 
