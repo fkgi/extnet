@@ -58,19 +58,19 @@ const (
 
 type assocT C.sctp_assoc_t
 
-type eventSubscribe struct {
-	dataIo          uint8
-	association     uint8
-	address         uint8
-	peerError       uint8
-	shutdown        uint8
-	partialDelivery uint8
-	adaptationLayer uint8
-	authentication  uint8
-}
-
 func setNotify(fd int) error {
-	event := eventSubscribe{}
+	type opt struct {
+		dataIo          uint8
+		association     uint8
+		address         uint8
+		peerError       uint8
+		shutdown        uint8
+		partialDelivery uint8
+		adaptationLayer uint8
+		authentication  uint8
+	}
+
+	event := opt{}
 	event.dataIo = 1
 	event.association = 1
 	event.address = 1

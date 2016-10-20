@@ -159,43 +159,15 @@ func (c *SCTPConn) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-// DialSCTP connects from the local address laddr to the remote address raddr.
-func DialSCTP(laddr, raddr *SCTPAddr) (c *SCTPConn, e error) {
-	sock, e := bindsocket(laddr)
-	if e != nil {
-		return nil, e
-	}
-
-	// create listener
-	l := &SCTPListener{}
-	l.sock = sock
-	l.con = make(map[assocT]*SCTPConn)
-	l.accept = make(chan *SCTPConn, 1)
-
-	// start reading buffer
-	go read(l)
-
-	e = l.ConnectSCTP(raddr)
-	if e != nil {
-		return nil, e
-	}
-	c = <-l.accept
-	close(l.accept)
-	l.accept = nil
-
-	return
-}
-
-type rtoinfo struct {
-	assocID assocT
-	ini     uint32
-	max     uint32
-	min     uint32
-}
-
 // SetRtoInfo set retransmit timer options
 func (c *SCTPConn) SetRtoInfo(ini, min, max int) error {
-	attr := rtoinfo{
+	type opt struct {
+		assocID assocT
+		ini     uint32
+		max     uint32
+		min     uint32
+	}
+	attr := opt{
 		assocID: c.id,
 		ini:     uint32(ini),
 		max:     uint32(max),
@@ -206,18 +178,17 @@ func (c *SCTPConn) SetRtoInfo(ini, min, max int) error {
 	return setSockOpt(c.l.sock, sctpRtoInfo, p, l)
 }
 
-type assocparams struct {
-	assocID     assocT
-	pRwnd       uint32
-	lRwnd       uint32
-	cLife       uint32
-	assocMaxRxt uint16
-	numPeerDest uint16
-}
-
 // SetAssocinfo set association parameter
 func (c *SCTPConn) SetAssocinfo(pRwnd, lRwnd, cLife, assocMaxRxt, numPeerDest int) error {
-	attr := assocparams{
+	type opt struct {
+		assocID     assocT
+		pRwnd       uint32
+		lRwnd       uint32
+		cLife       uint32
+		assocMaxRxt uint16
+		numPeerDest uint16
+	}
+	attr := opt{
 		assocID:     c.id,
 		pRwnd:       uint32(pRwnd),
 		lRwnd:       uint32(lRwnd),

@@ -101,6 +101,8 @@ func resolveFromRawAddr(ptr unsafe.Pointer, n int) *SCTPAddr {
 				addr.IP[i][j] = a.Addr[j]
 			}
 		}
+	default:
+		panic("invalid family of address")
 	}
 	return addr
 }
