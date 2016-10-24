@@ -5,43 +5,36 @@ import (
 	"log"
 
 	"github.com/fkgi/extnet"
+	"github.com/fkgi/extnet/example"
 )
-
-type ipList string
-
-func (l *ipList) String() string {
-	return string(*l)
-}
-
-func (l *ipList) Set(s string) error {
-	*l = ipList(string(*l) + "/" + s)
-	return nil
-}
 
 func main() {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
-
+	extnet.Notificator = func(e error) {
+		log.Println(e)
+	}
 	log.Println("starting simple echo client")
+
 	// get option flag
-	var lips, rips ipList
-	flag.Var(&lips, "la", "bind local IP address")
-	flag.Var(&rips, "ra", "bind remote IP address")
-	lpt := flag.String("lp", "10002", "bind local port number")
-	rpt := flag.String("rp", "10001", "bind remote port number")
+	var li, ri example.IPList
+	flag.Var(&li, "la", "local IP address")
+	flag.Var(&ri, "ra", "remote IP address")
+	lp := flag.String("lp", "10002", "local port number")
+	rp := flag.String("rp", "10001", "remote port number")
 	flag.Parse()
 
-	if len(lips) == 0 || len(rips) == 0 {
+	if len(li) == 0 || len(ri) == 0 {
 		log.Fatal("no IP address")
 	}
 
 	log.Print("creating address...")
-	laddr, e := extnet.ResolveSCTPAddr(string(lips)[1:] + ":" + *lpt)
+	laddr, e := extnet.ResolveSCTPAddr(string(li)[1:] + ":" + *lp)
 	if e != nil {
 		log.Fatal(e)
 	}
 	log.Print("success as ", laddr, "(local)")
 
-	raddr, e := extnet.ResolveSCTPAddr(string(rips)[1:] + ":" + *rpt)
+	raddr, e := extnet.ResolveSCTPAddr(string(ri)[1:] + ":" + *rp)
 	if e != nil {
 		log.Fatal(e)
 	}

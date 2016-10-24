@@ -5,25 +5,18 @@ import (
 	"log"
 
 	"github.com/fkgi/extnet"
+	"github.com/fkgi/extnet/example"
 )
-
-type ipList string
-
-func (l *ipList) String() string {
-	return string(*l)
-}
-
-func (l *ipList) Set(s string) error {
-	*l = ipList(string(*l) + "/" + s)
-	return nil
-}
 
 func main() {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
+	extnet.Notificator = func(e error) {
+		log.Println(e)
+	}
 
 	log.Println("starting simple echo server")
 	// get option flag
-	var ips ipList
+	var ips example.IPList
 	flag.Var(&ips, "a", "bind IP address")
 	pt := flag.String("p", "10001", "bind port number")
 	flag.Parse()
