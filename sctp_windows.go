@@ -111,34 +111,33 @@ func init() {
 	}
 }
 
-type eventSubscribe struct {
-	dataIo          uint8
-	association     uint8
-	address         uint8
-	sendFailure     uint8
-	peerError       uint8
-	shutdown        uint8
-	partialDelivery uint8
-	adaptationLayer uint8
-	authentication  uint8
-	senderDry       uint8
-	streamReset     uint8
-}
-
 func setNotify(fd int) error {
-	event := eventSubscribe{}
-	event.dataIo = 1
-	event.association = 0
-	event.address = 0
-	event.sendFailure = 0
-	event.peerError = 0
-	event.shutdown = 1
-	event.partialDelivery = 0
-	event.adaptationLayer = 0
-	event.authentication = 0
-	event.senderDry = 0
-	event.streamReset = 0
+	type opt struct {
+		dataIo          uint8
+		association     uint8
+		address         uint8
+		sendFailure     uint8
+		peerError       uint8
+		shutdown        uint8
+		partialDelivery uint8
+		adaptationLayer uint8
+		authentication  uint8
+		senderDry       uint8
+		streamReset     uint8
+	}
 
+	event := opt{
+		dataIo:          1,
+		association:     1,
+		address:         0,
+		sendFailure:     0,
+		peerError:       0,
+		shutdown:        1,
+		partialDelivery: 0,
+		adaptationLayer: 0,
+		authentication:  0,
+		senderDry:       0,
+		streamReset:     0}
 	l := unsafe.Sizeof(event)
 	p := unsafe.Pointer(&event)
 
@@ -152,11 +151,13 @@ func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 		int32(opt),
 		(*byte)(p),
 		int32(l))
-
 }
 
 func sockOpen() (int, error) {
-	sock, e := syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, ipprotoSctp)
+	sock, e := syscall.Socket(
+		syscall.AF_INET,
+		syscall.SOCK_SEQPACKET,
+		ipprotoSctp)
 	return int(sock), e
 }
 

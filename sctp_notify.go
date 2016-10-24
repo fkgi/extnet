@@ -112,14 +112,12 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 		}
 
 		// create new connection
-		con := &(SCTPConn{})
-		con.l = l
-		con.id = c.assocID
-
-		con.buf = make([]byte, 0, RxBufferSize)
+		con := &SCTPConn{
+			l:   l,
+			id:  c.assocID,
+			buf: make([]byte, 0, RxBufferSize)}
 		con.win = con.buf
 		con.wc.L = &con.m
-
 		l.con[c.assocID] = con
 
 		if l.accept != nil {
@@ -285,8 +283,8 @@ func (l *SCTPListener) paddrChangeNotify(buf []byte) {
 		ip = net.IPv4(a.Addr[0], a.Addr[1], a.Addr[2], a.Addr[3])
 	case syscall.AF_INET6:
 		a := *(*syscall.RawSockaddrInet6)(unsafe.Pointer(&c.addr))
-		ip = make([]byte, 16)
-		for j := 0; j < 16; j++ {
+		ip = make([]byte, net.IPv6len)
+		for j := 0; j < net.IPv6len; j++ {
 			ip[j] = a.Addr[j]
 		}
 	default:

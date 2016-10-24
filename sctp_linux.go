@@ -70,15 +70,15 @@ func setNotify(fd int) error {
 		authentication  uint8
 	}
 
-	event := opt{}
-	event.dataIo = 1
-	event.association = 1
-	event.address = 1
-	event.peerError = 1
-	event.shutdown = 1
-	event.partialDelivery = 1
-	event.adaptationLayer = 1
-	event.authentication = 1
+	event := opt{
+		dataIo:          1,
+		association:     1,
+		address:         1,
+		peerError:       1,
+		shutdown:        1,
+		partialDelivery: 1,
+		adaptationLayer: 1,
+		authentication:  1}
 	l := unsafe.Sizeof(event)
 	p := unsafe.Pointer(&event)
 
@@ -99,7 +99,10 @@ func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 }
 
 func sockOpen() (int, error) {
-	return syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, C.IPPROTO_SCTP)
+	return syscall.Socket(
+		syscall.AF_INET,
+		syscall.SOCK_SEQPACKET,
+		C.IPPROTO_SCTP)
 }
 
 func sockListen(fd int) error {

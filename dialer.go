@@ -177,7 +177,6 @@ func (d *SCTPDialer) bindsocket(laddr *SCTPAddr) (int, error) {
 		a uint16
 		t uint16
 	}
-
 	attr := opt{
 		o: uint16(d.OutStream),
 		i: uint16(d.InStream),
@@ -185,6 +184,7 @@ func (d *SCTPDialer) bindsocket(laddr *SCTPAddr) (int, error) {
 		t: uint16(d.InitTimeout)}
 	l := unsafe.Sizeof(attr)
 	p := unsafe.Pointer(&attr)
+
 	e = setSockOpt(sock, sctpInitMsg, p, l)
 	if e != nil {
 		sockClose(sock)

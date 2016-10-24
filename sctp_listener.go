@@ -26,8 +26,10 @@ func (l *SCTPListener) AcceptSCTP() (c *SCTPConn, e error) {
 	c = <-l.accept
 	if c == nil {
 		e = &net.OpError{
-			Op: "accept", Net: "sctp", Addr: l.Addr(),
-			Err: errors.New("socket is closed")}
+			Op:   "accept",
+			Net:  "sctp",
+			Addr: l.Addr(),
+			Err:  errors.New("socket is closed")}
 	}
 	return
 }
@@ -69,16 +71,22 @@ func (l *SCTPListener) Connect(addr net.Addr) error {
 	}
 	laddr := l.Addr()
 	return &net.OpError{
-		Op: "connect", Net: "sctp", Source: laddr, Addr: addr,
-		Err: errors.New("invalid Addr, not SCTPAddr")}
+		Op:     "connect",
+		Net:    "sctp",
+		Source: laddr,
+		Addr:   addr,
+		Err:    errors.New("invalid Addr, not SCTPAddr")}
 }
 
 // ConnectSCTP create new connection of this listener
 func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 	if l.sock == -1 {
 		return &net.OpError{
-			Op: "connect", Net: "sctp", Source: l.Addr(), Addr: raddr,
-			Err: errors.New("socket is closed")}
+			Op:     "connect",
+			Net:    "sctp",
+			Source: l.Addr(),
+			Addr:   raddr,
+			Err:    errors.New("socket is closed")}
 	}
 
 	// connect SCTP connection to raddr
@@ -86,7 +94,11 @@ func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 	_, e := sctpConnectx(l.sock, ptr, n)
 	if e != nil {
 		return &net.OpError{
-			Op: "connect", Net: "sctp", Source: l.Addr(), Addr: raddr, Err: e}
+			Op:     "connect",
+			Net:    "sctp",
+			Source: l.Addr(),
+			Addr:   raddr,
+			Err:    e}
 	}
 	return nil
 }

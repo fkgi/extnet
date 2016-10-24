@@ -70,7 +70,7 @@ func main() {
 	log.Print("success as \"", string(buf[:n]), "\", length is ", n)
 
 	log.Print("closing...")
-	c.Close()
+	e = c.Close()
 	if e != nil {
 		log.Print("ERROR: ", e)
 	}

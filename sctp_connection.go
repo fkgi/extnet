@@ -32,7 +32,9 @@ func (c *SCTPConn) Read(b []byte) (n int, e error) {
 	var t *time.Timer
 	if now := time.Now(); !c.rd.IsZero() && now.Before(c.rd) {
 		t = time.AfterFunc(c.rd.Sub(now), func() {
-			er := &SctpError{timeout: true, Err: errors.New("read timeout")}
+			er := &SctpError{
+				timeout: true,
+				Err:     errors.New("read timeout")}
 			c.queue(nil, er)
 		})
 	}
@@ -122,7 +124,6 @@ func (c *SCTPConn) LocalAddr() net.Addr {
 		return nil
 	}
 	defer sctpFreeladdrs(ptr)
-
 	return resolveFromRawAddr(ptr, n)
 }
 
@@ -133,7 +134,6 @@ func (c *SCTPConn) RemoteAddr() net.Addr {
 		return nil
 	}
 	defer sctpFreepaddrs(ptr)
-
 	return resolveFromRawAddr(ptr, n)
 }
 

@@ -13,20 +13,20 @@ func main() {
 	extnet.Notificator = func(e error) {
 		log.Println(e)
 	}
-
 	log.Println("starting simple echo server")
-	// get option flag
-	var ips example.IPList
-	flag.Var(&ips, "a", "bind IP address")
-	pt := flag.String("p", "10001", "bind port number")
+
+	// get olpion flag
+	var li example.IPList
+	flag.Var(&li, "la", "local IP address")
+	lp := flag.String("lp", "10001", "local port number")
 	flag.Parse()
 
-	if len(ips) == 0 {
+	if len(li) == 0 {
 		log.Fatal("ERROR: no IP address")
 	}
 
 	log.Print("creating address...")
-	addr, e := extnet.ResolveSCTPAddr(string(ips)[1:] + ":" + *pt)
+	addr, e := extnet.ResolveSCTPAddr(string(li)[1:] + ":" + *lp)
 	if e != nil {
 		log.Fatal(e)
 	}
@@ -40,13 +40,13 @@ func main() {
 	log.Print("success on ", l.Addr())
 
 	for {
-		log.Print("accepting...")
-		c, e := l.AcceptSCTP()
+		log.Print("accelping...")
+		c, e := l.AccelpSCTP()
 		if e != nil {
 			log.Println(e)
 			continue
 		}
-
+		
 		go func(c *extnet.SCTPConn) {
 			log.Print("new connection is available")
 			log.Print(" local : ", c.LocalAddr())
