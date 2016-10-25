@@ -44,7 +44,7 @@ func (d *SCTPDialer) Dial(n, addr string) (net.Conn, error) {
 			Err:    net.UnknownNetworkError(n)}
 	}
 
-	ra, e := ResolveSCTPAddr(addr)
+	ra, e := ResolveSCTPAddr(n, addr)
 	if e != nil {
 		return nil, e
 	}
