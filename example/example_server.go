@@ -5,8 +5,18 @@ import (
 	"log"
 
 	"github.com/fkgi/extnet"
-	"github.com/fkgi/extnet/example"
 )
+
+type IPList string
+
+func (l *IPList) String() string {
+	return string(*l)
+}
+
+func (l *IPList) Set(s string) error {
+	*l = IPList(string(*l) + "/" + s)
+	return nil
+}
 
 func main() {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
@@ -16,7 +26,7 @@ func main() {
 	log.Println("starting simple echo server")
 
 	// get olpion flag
-	var li example.IPList
+	var li IPList
 	flag.Var(&li, "la", "local IP address")
 	lp := flag.String("lp", "10001", "local port number")
 	flag.Parse()
@@ -26,14 +36,14 @@ func main() {
 	}
 
 	log.Print("creating address...")
-	addr, e := extnet.ResolveSCTPAddr(string(li)[1:] + ":" + *lp)
+	addr, e := extnet.ResolveSCTPAddr("sctp", string(li)[1:]+":"+*lp)
 	if e != nil {
 		log.Fatal(e)
 	}
 	log.Print("success as ", addr)
 
 	log.Print("starting listen... ")
-	l, e := extnet.ListenSCTP(addr)
+	l, e := extnet.ListenSCTP("sctp", addr)
 	if e != nil {
 		log.Fatal(e)
 	}
@@ -41,12 +51,12 @@ func main() {
 
 	for {
 		log.Print("accelping...")
-		c, e := l.AccelpSCTP()
+		c, e := l.AcceptSCTP()
 		if e != nil {
 			log.Println(e)
 			continue
 		}
-		
+
 		go func(c *extnet.SCTPConn) {
 			log.Print("new connection is available")
 			log.Print(" local : ", c.LocalAddr())
