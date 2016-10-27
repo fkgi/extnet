@@ -63,22 +63,26 @@ func setNotify(fd int) error {
 		dataIo          uint8
 		association     uint8
 		address         uint8
+		sendFailed      uint8
 		peerError       uint8
 		shutdown        uint8
 		partialDelivery uint8
 		adaptationLayer uint8
 		authentication  uint8
+		senderDry       uint8
 	}
 
 	event := opt{
 		dataIo:          1,
 		association:     1,
 		address:         1,
+		sendFailed:      1,
 		peerError:       1,
 		shutdown:        1,
 		partialDelivery: 1,
 		adaptationLayer: 1,
-		authentication:  1}
+		authentication:  1,
+		senderDry:       1}
 	l := unsafe.Sizeof(event)
 	p := unsafe.Pointer(&event)
 
@@ -125,15 +129,15 @@ func sctpBindx(fd int, ptr unsafe.Pointer, l int) error {
 	return nil
 }
 
-func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (int, error) {
-	t := 0
+func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (assocT, error) {
+	t := assocT(0)
 	n, e := C.sctp_connectx(
 		C.int(fd),
 		(*C.struct_sockaddr)(ptr),
 		C.int(l),
 		(*C.sctp_assoc_t)(unsafe.Pointer(&t)))
 	if int(n) < 0 {
-		return 0, e
+		return t, e
 	}
 	return t, nil
 }
@@ -153,6 +157,29 @@ func sctpSend(fd int, b []byte, info *sndrcvInfo, flag int) (int, error) {
 		return -1, e
 	}
 	return int(n), nil
+}
+
+func sctpPolling(fd int) error {
+	addr := &syscall.RawSockaddrInet4{
+		Family: syscall.AF_INET,
+		Port:   0,
+		Addr:   [4]byte{0x7f, 0x00, 0x00, 0x01}}
+	n, e := C.sctp_sendmsg(
+		C.int(fd),
+		unsafe.Pointer(&[]byte{0x00}[0]),
+		C.size_t(1),
+		(*C.struct_sockaddr)(unsafe.Pointer(addr)),
+		C.socklen_t(unsafe.Sizeof(*addr)),
+		C.uint32_t(CloseNotifyPpid),   // ppid
+		C.uint32_t(0),                 // flags
+		C.uint16_t(0),                 // stream_no
+		C.uint32_t(0),                 // timetolive
+		C.uint32_t(CloseNotifyCotext)) // context
+
+	if int(n) < 0 {
+		return e
+	}
+	return nil
 }
 
 func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {

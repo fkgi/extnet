@@ -1,7 +1,6 @@
 package extnet
 
 import (
-	"errors"
 	"io"
 	"net"
 	"sync"
@@ -32,9 +31,12 @@ func (c *SCTPConn) Read(b []byte) (n int, e error) {
 	var t *time.Timer
 	if now := time.Now(); !c.rd.IsZero() && now.Before(c.rd) {
 		t = time.AfterFunc(c.rd.Sub(now), func() {
-			er := &SctpError{
-				timeout: true,
-				Err:     errors.New("read timeout")}
+			er := &net.OpError{
+				Op:     "read",
+				Net:    "sctp",
+				Source: c.LocalAddr(),
+				Addr:   c.RemoteAddr(),
+				Err:    &timeoutError{}}
 			c.queue(nil, er)
 		})
 	}
@@ -92,18 +94,50 @@ func (c *SCTPConn) queue(b []byte, e error) error {
 }
 
 func (c *SCTPConn) Write(b []byte) (int, error) {
-	return c.send(b, 0)
+	n, e := c.send(b, 0)
+	if e != nil {
+		e = &net.OpError{
+			Op:     "write",
+			Net:    "sctp",
+			Source: c.LocalAddr(),
+			Addr:   c.RemoteAddr(),
+			Err:    e}
+	}
+	return n, e
 }
 
 // Close closes the connection.
 func (c *SCTPConn) Close() error {
 	_, e := c.send([]byte{}, sctpEoF)
+	if e != nil {
+		e = &net.OpError{
+			Op:     "close",
+			Net:    "sctp",
+			Source: c.LocalAddr(),
+			Addr:   c.RemoteAddr(),
+			Err:    e}
+	}
+	b := make([]byte, 1024)
+	for {
+		_, eof := c.Read(b)
+		if eof == io.EOF {
+			break
+		}
+	}
 	return e
 }
 
 // Abort closes the connection with abort message.
 func (c *SCTPConn) Abort(reason string) error {
 	_, e := c.send([]byte(reason), sctpAbort)
+	if e != nil {
+		e = &net.OpError{
+			Op:     "abort",
+			Net:    "sctp",
+			Source: c.LocalAddr(),
+			Addr:   c.RemoteAddr(),
+			Err:    e}
+	}
 	return e
 }
 

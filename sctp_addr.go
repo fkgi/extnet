@@ -179,6 +179,4 @@ func (a *SCTPAddr) String() string {
 }
 
 // Network returns the address's network name, "sctp".
-func (a *SCTPAddr) Network() string {
-	return "sctp"
-}
+func (a *SCTPAddr) Network() string { return "sctp" }

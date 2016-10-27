@@ -8,6 +8,21 @@ import (
 	"unsafe"
 )
 
+var sctpErrorMap = map[uint16]error{
+	0x100: fmt.Errorf("Invalid Stream Identifier"),
+	0x200: fmt.Errorf("Missing Mandatory Parameter"),
+	0x300: fmt.Errorf("Stale Cookie Error"),
+	0x400: fmt.Errorf("Out of Resource"),
+	0x500: fmt.Errorf("Unresolvable Address"),
+	0x600: fmt.Errorf("Unrecognized Chunk Type"),
+	0x700: fmt.Errorf("Invalid Mandatory Parameter"),
+	0x800: fmt.Errorf("Unrecognized Parameters"),
+	0x900: fmt.Errorf("No User Data"),
+	0xa00: fmt.Errorf("Cookie Received While Shutting Down"),
+	0xb00: fmt.Errorf("Restart of an Association with New Addresses"),
+	0xc00: fmt.Errorf("User Initiated Abort"),
+	0xd00: fmt.Errorf("Protocol Violation")}
+
 // SctpAssocUp is the error type that indicate new association is ready.
 type SctpAssocUp struct {
 	ID      int
@@ -26,7 +41,7 @@ func (e *SctpAssocUp) Error() string {
 // SctpAssocLost is the error type that indicate the association has failed.
 type SctpAssocLost struct {
 	ID  int
-	Err uint16
+	Err error
 }
 
 func (e *SctpAssocLost) Error() string {
@@ -34,7 +49,7 @@ func (e *SctpAssocLost) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"the association(id=%d) has failed", e.ID)
+		"the association(id=%d) has failed: %s", e.ID, e.Err)
 }
 
 // SctpAssocShutdown is the error type that indicate
@@ -70,8 +85,7 @@ func (e *SctpAssocRestart) Error() string {
 // SctpAssocStartFail is the error type that indicate
 // the association failed to setup.
 type SctpAssocStartFail struct {
-	ID  int
-	Err uint16
+	ID int
 }
 
 func (e *SctpAssocStartFail) Error() string {
@@ -111,30 +125,35 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 				c.assocID))
 		}
 
-		// create new connection
-		con := &SCTPConn{
-			l:   l,
-			id:  c.assocID,
-			buf: make([]byte, 0, RxBufferSize)}
-		con.win = con.buf
-		con.wc.L = &con.m
-		l.con[c.assocID] = con
+		if l.close == nil {
+			con := &SCTPConn{
+				l:   l,
+				id:  c.assocID,
+				buf: make([]byte, 0, RxBufferSize)}
+			con.win = con.buf
+			con.wc.L = &con.m
 
-		if l.accept != nil {
+			l.con[c.assocID] = con
 			l.accept <- con
 		} else {
-			con.Abort("closed")
+			info := sndrcvInfo{
+				flags:   sctpAbort,
+				assocID: c.assocID}
+			sctpSend(l.sock, []byte("closed"), &info, 0)
 		}
 	case sctpCommLost:
 		if Notificator != nil {
 			Notificator(&SctpAssocLost{
 				ID:  int(c.assocID),
-				Err: c.sacError})
+				Err: sctpErrorMap[c.sacError]})
 		}
 
 		if con, ok := l.con[c.assocID]; ok {
 			delete(l.con, c.assocID)
 			con.queue(nil, io.EOF)
+		}
+		if l.close != nil && len(l.con) == 0 {
+			sockClose(l.sock)
 		}
 	case sctpShutdownComp:
 		if Notificator != nil {
@@ -146,6 +165,9 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 			delete(l.con, c.assocID)
 			con.queue(nil, io.EOF)
 		}
+		if l.close != nil && len(l.con) == 0 {
+			sockClose(l.sock)
+		}
 	case sctpRestart:
 		if Notificator != nil {
 			Notificator(&SctpAssocRestart{
@@ -156,8 +178,7 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 	case sctpCantStrAssoc:
 		if Notificator != nil {
 			Notificator(&SctpAssocStartFail{
-				ID:  int(c.assocID),
-				Err: c.sacError})
+				ID: int(c.assocID)})
 		}
 	}
 	return
@@ -360,6 +381,10 @@ func (l *SCTPListener) sendFailedNotify(buf []byte) {
 		data     []byte
 	}
 	c := (*ntfy)(unsafe.Pointer(&buf[0]))
+	if c.info.ppid == CloseNotifyPpid &&
+		c.info.context == CloseNotifyCotext {
+		sockClose(l.sock)
+	}
 	if Notificator != nil {
 		Notificator(&SctpSendFailed{
 			ID: int(c.assocID)})

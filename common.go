@@ -1,18 +1,19 @@
 package extnet
 
-import "log"
-
 const (
 	// RxBufferSize is network recieve queue size
 	RxBufferSize = 10240
 	// BacklogSize is accept queue size
 	BacklogSize = 128
+
+	// CloseNotifyPpid is used close listener
+	CloseNotifyPpid = 9999
+	// CloseNotifyCotext is used close listener
+	CloseNotifyCotext = 9999
 )
 
 // Notificator is called when error or trace event are occured
-var Notificator = func(e error) {
-	log.Println(e)
-}
+var Notificator func(e error)
 
 type sndrcvInfo struct {
 	stream     uint16
@@ -26,20 +27,8 @@ type sndrcvInfo struct {
 	assocID    assocT
 }
 
-// SctpError is the erro type returned by SCTP functions.
-type SctpError struct {
-	timeout bool
-	Err     error
-}
+type timeoutError struct{}
 
-func (e *SctpError) Error() string {
-	if e == nil {
-		return "<nil>"
-	}
-	return e.Err.Error()
-}
-
-// Timeout indicate timeout is occured.
-func (e *SctpError) Timeout() bool {
-	return e.timeout
-}
+func (e *timeoutError) Error() string   { return "i/o timeout" }
+func (e *timeoutError) Timeout() bool   { return true }
+func (e *timeoutError) Temporary() bool { return true }

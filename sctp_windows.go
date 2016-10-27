@@ -56,6 +56,7 @@ var (
 	fsctpBindx      *syscall.Proc
 	fsctpConnectx   *syscall.Proc
 	fsctpSend       *syscall.Proc
+	fsctpSendMsg    *syscall.Proc
 	fsctpRecvmsg    *syscall.Proc
 	fsctpGetladdrs  *syscall.Proc
 	fsctpFreeladdrs *syscall.Proc
@@ -86,6 +87,10 @@ func init() {
 		log.Fatal(e)
 	}
 	fsctpSend, e = dll.FindProc("internal_sctp_send")
+	if e != nil {
+		log.Fatal(e)
+	}
+	fsctpSendMsg, e = dll.FindProc("internal_sctp_sendmsg")
 	if e != nil {
 		log.Fatal(e)
 	}
@@ -186,15 +191,15 @@ func sctpBindx(fd int, ptr unsafe.Pointer, l int) error {
 	return nil
 }
 
-func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (int, error) {
-	t := 0
+func sctpConnectx(fd int, ptr unsafe.Pointer, l int) (assocT, error) {
+	t := assocT(0)
 	n, _, e := fsctpConnectx.Call(
 		uintptr(fd),
 		uintptr(ptr),
 		uintptr(l),
 		uintptr(unsafe.Pointer(&t)))
 	if int(n) < 0 {
-		return 0, e
+		return t, e
 	}
 	return t, nil
 }
@@ -214,6 +219,29 @@ func sctpSend(fd int, b []byte, info *sndrcvInfo, flag int) (int, error) {
 		return -1, e
 	}
 	return int(n), nil
+}
+
+func sctpPolling(fd int) error {
+	addr := &syscall.RawSockaddrInet4{
+		Family: syscall.AF_INET,
+		Port:   0,
+		Addr:   [4]byte{0x7f, 0x00, 0x00, 0x01}}
+	n, _, e := fsctpSendMsg.Call(
+		uintptr(fd),
+		uintptr(unsafe.Pointer(&[]byte{0x00}[0])),
+		uintptr(1),
+		uintptr(unsafe.Pointer(addr)),
+		uintptr(unsafe.Sizeof(*addr)),
+		uintptr(CloseNotifyPpid),   // ppid
+		uintptr(0),                 // flags
+		uintptr(0),                 // stream_no
+		uintptr(0),                 // timetolive
+		uintptr(CloseNotifyCotext)) // context
+
+	if int(n) < 0 {
+		return e
+	}
+	return nil
 }
 
 func sctpRecvmsg(fd int, b []byte, info *sndrcvInfo, flag *int) (int, error) {

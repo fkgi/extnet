@@ -52,37 +52,34 @@ func (d *SCTPDialer) Dial(n, addr string) (net.Conn, error) {
 }
 
 func dial(d *SCTPDialer, addr *SCTPAddr) (*SCTPConn, error) {
-	if d.LocalAddr == nil {
-		return nil, &net.OpError{
-			Op:   "dial",
-			Net:  "sctp",
-			Addr: d.LocalAddr,
-			Err:  fmt.Errorf("no local address")}
-	}
+	l, e := listen(d)
 
-	sock, e := d.bindsocket(d.LocalAddr)
+	// connect SCTP connection to raddr
+	ptr, n := addr.rawAddr()
+	i, e := sctpConnectx(l.sock, ptr, n)
 	if e != nil {
+		e = &net.OpError{
+			Op:     "connect",
+			Net:    "sctp",
+			Source: l.Addr(),
+			Addr:   addr,
+			Err:    e}
+		l.Close()
 		return nil, e
 	}
 
-	// create listener
-	l := &SCTPListener{
-		sock:   sock,
-		con:    make(map[assocT]*SCTPConn),
-		accept: make(chan *SCTPConn, 1)}
-
-	// start reading buffer
-	go read(l)
-
-	e = l.ConnectSCTP(addr)
-	if e != nil {
-		return nil, e
+	for {
+		c, e := l.AcceptSCTP()
+		if e != nil {
+			l.Close()
+			return nil, e
+		}
+		if c.id == i {
+			l.close = make(chan bool)
+			return c, nil
+		}
+		c.Abort("close")
 	}
-	c := <-l.accept
-	close(l.accept)
-	l.accept = nil
-
-	return c, nil
 }
 
 // ListenSCTP announces on the SCTP address laddr
@@ -140,13 +137,16 @@ func listen(d *SCTPDialer) (*SCTPListener, error) {
 		accept: make(chan *SCTPConn, BacklogSize)}
 
 	// start reading buffer
-	go read(l)
+	r := make(chan bool)
+	go read(l, r)
+	<-r
 
 	return l, nil
 }
 
 // bind SCTP socket
 func (d *SCTPDialer) bindsocket(laddr *SCTPAddr) (int, error) {
+
 	// create SCTP connection socket
 	sock, e := sockOpen()
 	if e != nil {

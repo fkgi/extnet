@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
+	"syscall"
 	"unsafe"
 )
 
@@ -13,6 +15,8 @@ type SCTPListener struct {
 	sock   int
 	con    map[assocT]*SCTPConn
 	accept chan *SCTPConn
+	m      sync.Mutex
+	close  chan bool
 }
 
 // Accept implements the Accept method in the Listener interface;
@@ -23,7 +27,12 @@ func (l *SCTPListener) Accept() (net.Conn, error) {
 
 // AcceptSCTP accepts the next incoming call and returns the new connection.
 func (l *SCTPListener) AcceptSCTP() (c *SCTPConn, e error) {
-	c = <-l.accept
+	l.m.Lock()
+	defer l.m.Unlock()
+
+	if l.close == nil {
+		c = <-l.accept
+	}
 	if c == nil {
 		e = &net.OpError{
 			Op:   "accept",
@@ -36,21 +45,12 @@ func (l *SCTPListener) AcceptSCTP() (c *SCTPConn, e error) {
 
 // Close stops listening on the SCTP address.
 func (l *SCTPListener) Close() (e error) {
-	s := l.sock
-	if s == -1 {
-		return
+	if l.close == nil {
+		l.close = make(chan bool)
+		sctpPolling(l.sock)
+		<-l.close
 	}
-	l.sock = -1
-
-	t := l.accept
-	l.accept = nil
-	close(t)
-
-	for _, c := range l.con {
-		c.queue(nil, io.EOF)
-	}
-
-	return sockClose(s)
+	return
 }
 
 // Addr returns the listener's network address, a *SCTPAddr.
@@ -69,18 +69,17 @@ func (l *SCTPListener) Connect(addr net.Addr) error {
 	if a, ok := addr.(*SCTPAddr); ok {
 		return l.ConnectSCTP(a)
 	}
-	laddr := l.Addr()
 	return &net.OpError{
 		Op:     "connect",
 		Net:    "sctp",
-		Source: laddr,
+		Source: l.Addr(),
 		Addr:   addr,
 		Err:    errors.New("invalid Addr, not SCTPAddr")}
 }
 
 // ConnectSCTP create new connection of this listener
 func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
-	if l.sock == -1 {
+	if l.close != nil {
 		return &net.OpError{
 			Op:     "connect",
 			Net:    "sctp",
@@ -103,8 +102,55 @@ func (l *SCTPListener) ConnectSCTP(raddr *SCTPAddr) error {
 	return nil
 }
 
+// SctpHandlerStart is the error type that indicate start sctp message handler.
+type SctpHandlerStart struct {
+	Addr net.Addr
+}
+
+func (e *SctpHandlerStart) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("start sctp message handler on %s", e.Addr)
+}
+
+// SctpHandlerStop is the error type that indicate stop sctp message handler.
+type SctpHandlerStop struct {
+	Addr net.Addr
+	Err  error
+}
+
+func (e *SctpHandlerStop) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Err == nil {
+		return fmt.Sprintf("stop sctp message handler on %s", e.Addr)
+	}
+	return fmt.Sprintf(
+		"recieve message failed, stop sctp message handler on %s: %s",
+		e.Addr, e.Err)
+}
+
+// SctpHandlerError is the error type that indicate failure in message handler.
+type SctpHandlerError struct {
+	Addr net.Addr
+	Err  error
+}
+
+func (e *SctpHandlerError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("message handling failed on %s: %s", e.Addr, e.Err)
+}
+
 // read data from buffer
-func read(l *SCTPListener) {
+func read(l *SCTPListener, ready chan bool) {
+	if Notificator != nil {
+		Notificator(&SctpHandlerStart{Addr: l.Addr()})
+	}
+
 	type sctpTlv struct {
 		snType   uint16
 		snFlags  uint16
@@ -115,14 +161,25 @@ func read(l *SCTPListener) {
 	info := sndrcvInfo{}
 	flag := 0
 
+	ready <- true
 	for {
 		// receive message
 		n, e := sctpRecvmsg(l.sock, buf, &info, &flag)
 		if e != nil {
-			if l.accept != nil {
-				l.Close()
+			eno, ok := e.(*syscall.Errno)
+			if ok && eno.Temporary() {
+				if Notificator != nil {
+					Notificator(&SctpHandlerError{
+						Addr: l.Addr(), Err: e})
+				}
+				continue
+			} else {
+				if Notificator != nil {
+					Notificator(&SctpHandlerStop{
+						Addr: l.Addr(), Err: e})
+				}
+				break
 			}
-			break
 		}
 
 		// check message type is notify
@@ -150,7 +207,8 @@ func read(l *SCTPListener) {
 		} else {
 			if Notificator != nil {
 				Notificator(&SctpRecieveData{
-					ID: int(info.assocID)})
+					ID:   int(info.assocID),
+					Data: buf[:n]})
 			}
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
@@ -162,12 +220,24 @@ func read(l *SCTPListener) {
 			}
 		}
 	}
+
+	for _, c := range l.con {
+		c.queue(nil, io.EOF)
+	}
+	sockClose(l.sock)
+
+	if l.close == nil {
+		l.close = make(chan bool)
+	} else {
+		l.close <- true
+	}
 }
 
 // SctpRecieveData is the error type that indicate
 // recieve data form the association.
 type SctpRecieveData struct {
-	ID int
+	ID   int
+	Data []byte
 }
 
 func (e *SctpRecieveData) Error() string {
@@ -175,5 +245,5 @@ func (e *SctpRecieveData) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"recieve data from association(id=%d)", e.ID)
+		"recieve data from association(id=%d): % x", e.ID, e.Data)
 }
