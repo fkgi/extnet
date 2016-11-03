@@ -450,3 +450,103 @@ func (l *SCTPListener) shutdownNotify(buf []byte) {
 			ID: int(c.assocID)})
 	}
 }
+
+// PartialDelivery is the error type that indicate
+// the association is engaged in a partial delivery of a message.
+type PartialDelivery struct {
+	ID  int
+	Err error
+}
+
+func (e *PartialDelivery) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf(
+		"association(id=%d) is engaged in a partial delivery of a message %s",
+		e.ID, e.Err)
+}
+
+func (l *SCTPListener) partialDeliveryNotify(buf []byte) {
+	type ntfy struct {
+		pdtype     uint16
+		flags      uint16
+		length     uint32
+		indication uint32
+		assocID    assocT
+	}
+
+	c := (*ntfy)(unsafe.Pointer(&buf[0]))
+	var e error
+	if c.indication == 0 {
+		e = fmt.Errorf("SCTP_PARTIAL_DELIVERY_ABORTED")
+	}
+	if Notificator != nil {
+		Notificator(&PartialDelivery{
+			ID:  int(c.assocID),
+			Err: e})
+	}
+}
+
+// AdaptationIndication is the error type that indicate
+// peer sends an Adaptation Layer Indication parameter.
+type AdaptationIndication struct {
+	ID        int
+	Indicator int
+}
+
+func (e *AdaptationIndication) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf(
+		"association(id=%d) receive Adaptation Layer Indication parameter %d",
+		e.ID, e.Indicator)
+}
+
+func (l *SCTPListener) adaptationIndicationNotify(buf []byte) {
+	type ntfy struct {
+		satype   uint16
+		flags    uint16
+		length   uint32
+		adaptInd uint32
+		assocID  assocT
+	}
+
+	c := (*ntfy)(unsafe.Pointer(&buf[0]))
+	if Notificator != nil {
+		Notificator(&AdaptationIndication{
+			ID:        int(c.assocID),
+			Indicator: int(c.adaptInd)})
+	}
+}
+
+// SenderDry is the error type that indicate
+// the SCTP stack has no more user data to send or retransmit.
+type SenderDry struct {
+	ID        int
+	Indicator int
+}
+
+func (e *SenderDry) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf(
+		"association(id=%d) has no more data to send or retransmit", e.ID)
+}
+
+func (l *SCTPListener) senderDryNotify(buf []byte) {
+	type ntfy struct {
+		drtype  uint16
+		flags   uint16
+		length  uint32
+		assocID assocT
+	}
+
+	c := (*ntfy)(unsafe.Pointer(&buf[0]))
+	if Notificator != nil {
+		Notificator(&SenderDry{
+			ID: int(c.assocID)})
+	}
+}

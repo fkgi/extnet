@@ -191,18 +191,20 @@ func read(l *SCTPListener, ready chan bool) {
 				l.assocChangeNotify(buf[:n])
 			case sctpPeerAddrChange:
 				l.paddrChangeNotify(buf[:n])
-			case sctpSendFailed:
-				l.sendFailedNotify(buf[:n])
 			case sctpRemoteError:
 				l.remoteErrorNotify(buf[:n])
+			case sctpSendFailed:
+				l.sendFailedNotify(buf[:n])
 			case sctpShutdownEvent:
 				l.shutdownNotify(buf[:n])
-			case sctpPartialDeliveryEvent:
-				// l.partialDeliveryNotify(buf[:n])
 			case sctpAdaptationIndication:
-				// l.adaptationIndicationNotify(buf[:n])
+				l.adaptationIndicationNotify(buf[:n])
+			case sctpPartialDeliveryEvent:
+				l.partialDeliveryNotify(buf[:n])
 			case sctpSenderDryEvent:
-				// l.senderDryNotify(buf[:n])
+				l.senderDryNotify(buf[:n])
+			default:
+				println(tlv.snType)
 			}
 		} else {
 			if Notificator != nil {
