@@ -102,9 +102,16 @@ func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 	return nil
 }
 
-func sockOpen() (int, error) {
+func sockOpenV4() (int, error) {
 	return syscall.Socket(
 		syscall.AF_INET,
+		syscall.SOCK_SEQPACKET,
+		C.IPPROTO_SCTP)
+}
+
+func sockOpenV6() (int, error) {
+	return syscall.Socket(
+		syscall.AF_INET6,
 		syscall.SOCK_SEQPACKET,
 		C.IPPROTO_SCTP)
 }

@@ -4,7 +4,7 @@ import "testing"
 
 func TestResolveSCTPAddr(t *testing.T) {
 	// invalid input
-	str := "127.0.0.1:10000"
+	str := testAddrs[0]
 	if _, e := ResolveSCTPAddr("aaa", str); e == nil {
 		t.Error("no failure in invalid network case")
 	}
@@ -14,7 +14,7 @@ func TestResolveSCTPAddr(t *testing.T) {
 		t.Error("no failure in invalid address case")
 	}
 
-	str = "127.0.0.1:invalid"
+	str = testAddrs[0] + "invalid"
 	if _, e := ResolveSCTPAddr("sctp", str); e == nil {
 		t.Error("no failure in invalid port number case")
 	}
@@ -40,32 +40,10 @@ func TestResolveSCTPAddr(t *testing.T) {
 	}
 
 	// valid input
-	str = "127.0.0.1:10000"
+	str = testAddrs[0]
 	if a, e := ResolveSCTPAddr("sctp", str); e != nil {
 		t.Errorf("failure in single ipv4 address: %s", e)
 	} else if a.String() != str {
 		t.Errorf("output %s is not same as %s", a.String(), str)
 	}
-
-	str = "127.0.0.1/127.0.0.2:10000"
-	if a, e := ResolveSCTPAddr("sctp", str); e != nil {
-		t.Errorf("failure in multi ipv4 address: %s", e)
-	} else if a.String() != str {
-		t.Errorf("output %s is not same as %s", a.String(), str)
-	}
-
-	str = "[::1]:10000"
-	if a, e := ResolveSCTPAddr("sctp", str); e != nil {
-		t.Errorf("failure in single ipv6 address: %s", e)
-	} else if a.String() != str {
-		t.Errorf("output %s is not same as %s", a.String(), str)
-	}
-
-	str = "[::1]/[::2]:10000"
-	if a, e := ResolveSCTPAddr("sctp", str); e != nil {
-		t.Errorf("failure in multi ipv6 address: %s", e)
-	} else if a.String() != str {
-		t.Errorf("output %s is not same as %s", a.String(), str)
-	}
-
 }

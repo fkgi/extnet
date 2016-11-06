@@ -3,18 +3,18 @@ package extnet
 import "testing"
 
 func TestAccept(t *testing.T) {
-	l, c := dialTo(addr1, addr2, t)
+	l, c := dialTo(testAddrs[0], testAddrs[1], t)
 
 	if lc, e := l.Accept(); e != nil {
 		t.Errorf("accept faied: %s", e)
 	} else {
-		if lc.LocalAddr().String() != addr2 {
+		if lc.LocalAddr().String() != testAddrs[1] {
 			t.Errorf("output %s is not same as %s",
-				lc.LocalAddr().String(), addr2)
+				lc.LocalAddr().String(), testAddrs[1])
 		}
-		if lc.RemoteAddr().String() != addr1 {
+		if lc.RemoteAddr().String() != testAddrs[0] {
 			t.Errorf("output %s is not same as %s",
-				lc.RemoteAddr().String(), addr1)
+				lc.RemoteAddr().String(), testAddrs[0])
 		}
 	}
 
@@ -22,26 +22,26 @@ func TestAccept(t *testing.T) {
 }
 
 func TestAcceptMulti(t *testing.T) {
-	l, c1 := dialTo(addr1, addr2, t)
+	l, c1 := dialTo(testAddrs[0], testAddrs[1], t)
 
 	if lc1, e := l.Accept(); e != nil {
 		t.Errorf("accept faied: %s", e)
 	} else {
-		if lc1.LocalAddr().String() != addr2 {
+		if lc1.LocalAddr().String() != testAddrs[1] {
 			t.Errorf("output %s is not same as %s",
-				lc1.LocalAddr().String(), addr2)
+				lc1.LocalAddr().String(), testAddrs[1])
 		}
-		if lc1.RemoteAddr().String() != addr1 {
+		if lc1.RemoteAddr().String() != testAddrs[0] {
 			t.Errorf("output %s is not same as %s",
-				lc1.RemoteAddr().String(), addr1)
+				lc1.RemoteAddr().String(), testAddrs[0])
 		}
 	}
 
-	la, e := ResolveSCTPAddr("sctp", addr3)
+	la, e := ResolveSCTPAddr("sctp", testAddrs[2])
 	if e != nil {
 		t.Fatalf("address generation failure: %s", e)
 	}
-	ra, e := ResolveSCTPAddr("sctp", addr2)
+	ra, e := ResolveSCTPAddr("sctp", testAddrs[1])
 	if e != nil {
 		t.Fatalf("address generation failure: %s", e)
 	}
@@ -50,24 +50,24 @@ func TestAcceptMulti(t *testing.T) {
 		t.Fatalf("dial faied: %s", e)
 	}
 
-	if c2.LocalAddr().String() != addr3 {
+	if c2.LocalAddr().String() != testAddrs[2] {
 		t.Errorf("output %s is not same as %s",
-			c2.LocalAddr().String(), addr3)
+			c2.LocalAddr().String(), testAddrs[2])
 	}
-	if c2.RemoteAddr().String() != addr2 {
+	if c2.RemoteAddr().String() != testAddrs[1] {
 		t.Errorf("output %s is not same as %s",
-			c2.RemoteAddr().String(), addr2)
+			c2.RemoteAddr().String(), testAddrs[1])
 	}
 	if lc2, e := l.Accept(); e != nil {
 		t.Errorf("accept faied: %s", e)
 	} else {
-		if lc2.LocalAddr().String() != addr2 {
+		if lc2.LocalAddr().String() != testAddrs[1] {
 			t.Errorf("output %s is not same as %s",
-				lc2.LocalAddr().String(), addr2)
+				lc2.LocalAddr().String(), testAddrs[1])
 		}
-		if lc2.RemoteAddr().String() != addr3 {
+		if lc2.RemoteAddr().String() != testAddrs[2] {
 			t.Errorf("output %s is not same as %s",
-				lc2.RemoteAddr().String(), addr3)
+				lc2.RemoteAddr().String(), testAddrs[2])
 		}
 	}
 
@@ -76,10 +76,10 @@ func TestAcceptMulti(t *testing.T) {
 }
 
 func TestConnect(t *testing.T) {
-	l1 := listenOn(addr2, t)
-	l2 := listenOn(addr1, t)
+	l1 := listenOn(testAddrs[1], t)
+	l2 := listenOn(testAddrs[0], t)
 
-	ra, e := ResolveSCTPAddr("sctp", addr2)
+	ra, e := ResolveSCTPAddr("sctp", testAddrs[1])
 	if e != nil {
 		t.Fatalf("address generation failure: %s", e)
 	}
@@ -90,13 +90,13 @@ func TestConnect(t *testing.T) {
 	if lc, e := l2.Accept(); e != nil {
 		t.Errorf("accept faied: %s", e)
 	} else {
-		if lc.LocalAddr().String() != addr1 {
+		if lc.LocalAddr().String() != testAddrs[0] {
 			t.Errorf("output %s is not same as %s",
-				lc.LocalAddr().String(), addr1)
+				lc.LocalAddr().String(), testAddrs[0])
 		}
-		if lc.RemoteAddr().String() != addr2 {
+		if lc.RemoteAddr().String() != testAddrs[1] {
 			t.Errorf("output %s is not same as %s",
-				lc.RemoteAddr().String(), addr2)
+				lc.RemoteAddr().String(), testAddrs[1])
 		}
 		e = lc.Close()
 		if e != nil {
@@ -115,23 +115,23 @@ func TestConnect(t *testing.T) {
 }
 
 func TestAcceptConnect(t *testing.T) {
-	l, c1 := dialTo(addr1, addr2, t)
+	l, c1 := dialTo(testAddrs[0], testAddrs[1], t)
 
 	if lc1, e := l.Accept(); e != nil {
 		t.Errorf("accept faied: %s", e)
 	} else {
-		if lc1.LocalAddr().String() != addr2 {
+		if lc1.LocalAddr().String() != testAddrs[1] {
 			t.Errorf("output %s is not same as %s",
-				lc1.LocalAddr().String(), addr2)
+				lc1.LocalAddr().String(), testAddrs[1])
 		}
-		if lc1.RemoteAddr().String() != addr1 {
+		if lc1.RemoteAddr().String() != testAddrs[0] {
 			t.Errorf("output %s is not same as %s",
-				lc1.RemoteAddr().String(), addr1)
+				lc1.RemoteAddr().String(), testAddrs[0])
 		}
 	}
 
-	l2 := listenOn(addr3, t)
-	ra, e := ResolveSCTPAddr("sctp", addr3)
+	l2 := listenOn(testAddrs[2], t)
+	ra, e := ResolveSCTPAddr("sctp", testAddrs[2])
 	if e != nil {
 		t.Fatalf("address generation failure: %s", e)
 	}
@@ -143,13 +143,13 @@ func TestAcceptConnect(t *testing.T) {
 	if e != nil {
 		t.Errorf("accept faied: %s", e)
 	}
-	if c2.LocalAddr().String() != addr3 {
+	if c2.LocalAddr().String() != testAddrs[2] {
 		t.Errorf("output %s is not same as %s",
-			c2.LocalAddr().String(), addr3)
+			c2.LocalAddr().String(), testAddrs[2])
 	}
-	if c2.RemoteAddr().String() != addr2 {
+	if c2.RemoteAddr().String() != testAddrs[1] {
 		t.Errorf("output %s is not same as %s",
-			c2.RemoteAddr().String(), addr2)
+			c2.RemoteAddr().String(), testAddrs[1])
 	}
 
 	c2.Close()

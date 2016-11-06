@@ -158,9 +158,17 @@ func setSockOpt(fd, opt int, p unsafe.Pointer, l uintptr) error {
 		int32(l))
 }
 
-func sockOpen() (int, error) {
+func sockOpenV4() (int, error) {
 	sock, e := syscall.Socket(
 		syscall.AF_INET,
+		syscall.SOCK_SEQPACKET,
+		ipprotoSctp)
+	return int(sock), e
+}
+
+func sockOpenV6() (int, error) {
+	sock, e := syscall.Socket(
+		syscall.AF_INET6,
 		syscall.SOCK_SEQPACKET,
 		ipprotoSctp)
 	return int(sock), e

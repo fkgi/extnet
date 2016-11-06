@@ -2,24 +2,108 @@ package extnet
 
 import (
 	"log"
+	"net"
 	"os"
+	"strconv"
 	"testing"
 )
 
-const (
-	addr1   = "127.0.0.1:10000"
-	addr2   = "127.0.0.1:10010"
-	addr3   = "127.0.0.1:10020"
-	addr4   = "127.0.0.1:10030"
-	testStr = "this is test"
+var (
+	testAddrs  = make([]string, 10)
+	basePort   = 10000
+	offsetPort = 10
+	testStr    = "this is test"
 )
 
 func TestMain(m *testing.M) {
 	Notificator = func(e error) { log.Println(e) }
-	// initiate
-	code := m.Run()
-	// destract
-	os.Exit(code)
+
+	addrs, e := net.InterfaceAddrs()
+	if e != nil {
+		os.Exit(1)
+	}
+	for _, addr := range addrs {
+		a, ok := (addr).(*net.IPNet)
+		if !ok {
+			os.Exit(1)
+		}
+		if a.IP.To4() == nil || a.IP.String() == "127.0.0.1" {
+			continue
+		}
+		p := basePort
+		for i := range testAddrs {
+			testAddrs[i] = a.IP.String() + ":" + strconv.Itoa(p)
+			p += offsetPort
+		}
+		break
+	}
+	if m.Run() == 1 {
+		os.Exit(1)
+	}
+
+	p := basePort
+	for i := range testAddrs {
+		testAddrs[i] = ":" + strconv.Itoa(p)
+		p += offsetPort
+	}
+	for _, addr := range addrs {
+		a, ok := (addr).(*net.IPNet)
+		if !ok {
+			os.Exit(1)
+		}
+		if a.IP.To4() == nil || a.IP.String() == "127.0.0.1" {
+			continue
+		}
+		for i := range testAddrs {
+			testAddrs[i] = "/" + a.IP.String() + testAddrs[i]
+		}
+	}
+	for i := range testAddrs {
+		testAddrs[i] = testAddrs[i][1:]
+	}
+	if m.Run() == 1 {
+		os.Exit(1)
+	}
+
+	for _, addr := range addrs {
+		a, ok := (addr).(*net.IPNet)
+		if !ok {
+			os.Exit(1)
+		}
+		if a.IP.To4() != nil || a.IP.To16() == nil || a.IP.String() == "::1" {
+			continue
+		}
+		p = basePort
+		for i := range testAddrs {
+			testAddrs[i] = a.IP.String() + ":" + strconv.Itoa(p)
+			p += offsetPort
+		}
+	}
+	if m.Run() == 1 {
+		os.Exit(1)
+	}
+
+	p = basePort
+	for i := range testAddrs {
+		testAddrs[i] = ":" + strconv.Itoa(p)
+		p += offsetPort
+	}
+	for _, addr := range addrs {
+		a, ok := (addr).(*net.IPNet)
+		if !ok {
+			os.Exit(1)
+		}
+		if a.IP.To4() != nil || a.IP.To16() == nil || a.IP.String() == "::1" {
+			continue
+		}
+		for i := range testAddrs {
+			testAddrs[i] = "/" + a.IP.String() + testAddrs[i]
+		}
+	}
+	for i := range testAddrs {
+		testAddrs[i] = testAddrs[i][1:]
+	}
+	os.Exit(m.Run())
 }
 
 func listenOn(addr string, t *testing.T) *SCTPListener {

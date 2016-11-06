@@ -3,7 +3,7 @@ package extnet
 import "testing"
 
 func TestListenSCTP(t *testing.T) {
-	l := listenOn(addr2, t)
+	l := listenOn(testAddrs[1], t)
 	e := l.Close()
 	if e != nil {
 		t.Errorf("close faied: %s", e)
@@ -11,6 +11,6 @@ func TestListenSCTP(t *testing.T) {
 }
 
 func TestDialSCTP(t *testing.T) {
-	l, c := dialTo(addr1, addr2, t)
+	l, c := dialTo(testAddrs[0], testAddrs[1], t)
 	closeAll(l, c, t)
 }
