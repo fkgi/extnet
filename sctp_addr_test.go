@@ -15,8 +15,9 @@ func TestResolveSCTPAddr(t *testing.T) {
 	}
 
 	str = testAddrs[0] + "invalid"
-	if _, e := ResolveSCTPAddr("sctp", str); e == nil {
-		t.Error("no failure in invalid port number case")
+	if a, e := ResolveSCTPAddr("sctp", str); e == nil {
+		t.Logf("%s", a)
+		t.Errorf("no failure in invalid port number case %s", str)
 	}
 
 	str = "a:10000"

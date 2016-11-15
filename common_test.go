@@ -1,7 +1,6 @@
 package extnet
 
 import (
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -16,96 +15,81 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	Notificator = func(e error) { log.Println(e) }
 
-	addrs, e := net.InterfaceAddrs()
-	if e != nil {
+	var addrs []net.IP
+
+	if ipns, e := net.InterfaceAddrs(); e != nil {
 		os.Exit(1)
-	}
-	for _, addr := range addrs {
-		a, ok := (addr).(*net.IPNet)
-		if !ok {
-			os.Exit(1)
+	} else {
+		for _, ipn := range ipns {
+			if a, ok := (ipn).(*net.IPNet); !ok {
+				os.Exit(1)
+			} else if a.IP.To4() != nil {
+				if a.IP.String() != "127.0.0.1" {
+					addrs = append(addrs, a.IP)
+				}
+			} else if a.IP.To16() != nil {
+				if a.IP.String() != "::1" {
+					addrs = append(addrs, a.IP)
+				}
+			}
 		}
-		if a.IP.To4() == nil || a.IP.String() == "127.0.0.1" {
-			continue
-		}
-		p := basePort
-		for i := range testAddrs {
-			testAddrs[i] = a.IP.String() + ":" + strconv.Itoa(p)
-			p += offsetPort
-		}
-		break
-	}
-	if m.Run() == 1 {
-		os.Exit(1)
 	}
 
-	p := basePort
-	for i := range testAddrs {
-		testAddrs[i] = ":" + strconv.Itoa(p)
-		p += offsetPort
-	}
+	// test for IP v4 address
 	for _, addr := range addrs {
-		a, ok := (addr).(*net.IPNet)
-		if !ok {
-			os.Exit(1)
-		}
-		if a.IP.To4() == nil || a.IP.String() == "127.0.0.1" {
-			continue
-		}
-		for i := range testAddrs {
-			testAddrs[i] = "/" + a.IP.String() + testAddrs[i]
-		}
-	}
-	for i := range testAddrs {
-		testAddrs[i] = testAddrs[i][1:]
-	}
-	if m.Run() == 1 {
-		os.Exit(1)
-	}
-
-	for _, addr := range addrs {
-		a, ok := (addr).(*net.IPNet)
-		if !ok {
-			os.Exit(1)
-		}
-		if a.IP.To4() != nil || a.IP.To16() == nil || a.IP.String() == "::1" {
-			continue
-		}
-		p = basePort
-		for i := range testAddrs {
-			testAddrs[i] = a.IP.String() + ":" + strconv.Itoa(p)
-			p += offsetPort
+		if addr.To4() != nil {
+			initAddrs(addr.String())
+			break
 		}
 	}
 	if m.Run() == 1 {
 		os.Exit(1)
 	}
 
-	p = basePort
-	for i := range testAddrs {
-		testAddrs[i] = ":" + strconv.Itoa(p)
-		p += offsetPort
-	}
+	// test for multiple IP v4 address
+	s := ""
 	for _, addr := range addrs {
-		a, ok := (addr).(*net.IPNet)
-		if !ok {
-			os.Exit(1)
-		}
-		if a.IP.To4() != nil || a.IP.To16() == nil || a.IP.String() == "::1" {
-			continue
-		}
-		for i := range testAddrs {
-			testAddrs[i] = "/" + a.IP.String() + testAddrs[i]
+		if addr.To4() != nil {
+			s = s + "/" + addr.String()
 		}
 	}
-	for i := range testAddrs {
-		testAddrs[i] = testAddrs[i][1:]
+	initAddrs(s[1:])
+	if m.Run() == 1 {
+		os.Exit(1)
 	}
+
+	// test for IP v6 address
+	for _, addr := range addrs {
+		if addr.To4() == nil && addr.To16() != nil {
+			initAddrs(addr.String())
+			break
+		}
+	}
+	if m.Run() == 1 {
+		os.Exit(1)
+	}
+
+	// test for multiple IP v6 address
+	s = ""
+	for _, addr := range addrs {
+		if addr.To4() == nil && addr.To16() != nil {
+			s = s + "/" + addr.String()
+		}
+	}
+	initAddrs(s[1:])
 	os.Exit(m.Run())
 }
 
+func initAddrs(addr string) {
+	p := basePort
+	for i := range testAddrs {
+		testAddrs[i] = addr + ":" + strconv.Itoa(p)
+		p += offsetPort
+	}
+}
+
+/*
 func listenOn(addr string, t *testing.T) *SCTPListener {
 	la, e := ResolveSCTPAddr("sctp", addr)
 	if e != nil {
@@ -164,3 +148,4 @@ func closeAll(l *SCTPListener, c *SCTPConn, t *testing.T) {
 		t.Errorf("close faied: %s", e)
 	}
 }
+*/
