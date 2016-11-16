@@ -53,6 +53,9 @@ func (d *SCTPDialer) Dial(n, addr string) (net.Conn, error) {
 
 func dial(d *SCTPDialer, addr *SCTPAddr) (*SCTPConn, error) {
 	l, e := listen(d)
+	if e != nil {
+		return nil, e
+	}
 
 	// connect SCTP connection to raddr
 	ptr, n := addr.rawAddr()
@@ -67,7 +70,6 @@ func dial(d *SCTPDialer, addr *SCTPAddr) (*SCTPConn, error) {
 		l.Close()
 		return nil, e
 	}
-
 	for {
 		c, e := l.AcceptSCTP()
 		if e != nil {
