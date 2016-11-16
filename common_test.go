@@ -17,6 +17,7 @@ var (
 func TestMain(m *testing.M) {
 
 	var addrs []net.IP
+	result := 0
 
 	if ipns, e := net.InterfaceAddrs(); e != nil {
 		os.Exit(1)
@@ -24,14 +25,8 @@ func TestMain(m *testing.M) {
 		for _, ipn := range ipns {
 			if a, ok := (ipn).(*net.IPNet); !ok {
 				os.Exit(1)
-			} else if a.IP.To4() != nil {
-				if a.IP.String() != "127.0.0.1" {
-					addrs = append(addrs, a.IP)
-				}
-			} else if a.IP.To16() != nil {
-				if a.IP.String() != "::1" {
-					addrs = append(addrs, a.IP)
-				}
+			} else if a.IP.IsGlobalUnicast() {
+				addrs = append(addrs, a.IP)
 			}
 		}
 	}
@@ -40,22 +35,18 @@ func TestMain(m *testing.M) {
 	for _, addr := range addrs {
 		if addr.To4() != nil {
 			initAddrs(addr.String())
+			result += m.Run()
 			break
 		}
-	}
-	if m.Run() == 1 {
-		os.Exit(1)
 	}
 
 	// test for IP v6 address
 	for _, addr := range addrs {
 		if addr.To4() == nil && addr.To16() != nil {
 			initAddrs("[" + addr.String() + "]")
+			result += m.Run()
 			break
 		}
-	}
-	if m.Run() == 1 {
-		os.Exit(1)
 	}
 
 	// test for multiple IP v4 address
@@ -65,9 +56,9 @@ func TestMain(m *testing.M) {
 			s = s + "/" + addr.String()
 		}
 	}
-	initAddrs(s[1:])
-	if m.Run() == 1 {
-		os.Exit(1)
+	if len(s) != 0 {
+		initAddrs(s[1:])
+		result += m.Run()
 	}
 
 	// test for multiple IP v6 address
@@ -77,8 +68,14 @@ func TestMain(m *testing.M) {
 			s = s + "/[" + addr.String() + "]"
 		}
 	}
-	initAddrs(s[1:])
-	os.Exit(m.Run())
+	if len(s) != 0 {
+		initAddrs(s[1:])
+		result += m.Run()
+	}
+
+	if result > 0 {
+		os.Exit(1)
+	}
 }
 
 func initAddrs(addr string) {

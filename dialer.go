@@ -152,9 +152,9 @@ func (d *SCTPDialer) bindsocket(laddr *SCTPAddr) (int, error) {
 	// create SCTP connection socket
 	sock := 0
 	var e error
-	if laddr.IP[0].To4 != nil {
+	if laddr.IP[0].To4() != nil {
 		sock, e = sockOpenV4()
-	} else if laddr.IP[0].To16 != nil {
+	} else if laddr.IP[0].To16() != nil {
 		sock, e = sockOpenV6()
 	} else {
 		e = &net.AddrError{
