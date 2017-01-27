@@ -29,38 +29,40 @@ func TestReadWrite(t *testing.T) {
 		t.Errorf("accept faied: %s", e)
 	}
 
-	n, e := c0.Write([]byte(testStr))
-	if e != nil {
-		t.Errorf("write data failed: %s", e)
-	}
-	if n != len(testStr) {
-		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-	}
+	for i := 0; i < 10; i++ {
+		n, e := c0.Write([]byte(testStr))
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
 
-	buf := make([]byte, 1024)
-	n, e = c1.Read(buf)
-	if e != nil {
-		t.Errorf("write data failed: %s", e)
-	}
-	if n != len(testStr) {
-		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-	}
+		buf := make([]byte, 1024)
+		n, e = c1.Read(buf)
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
 
-	n, e = c1.Write([]byte(testStr))
-	if e != nil {
-		t.Errorf("write data failed: %s", e)
-	}
-	if n != len(testStr) {
-		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-	}
+		n, e = c1.Write([]byte(testStr))
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
 
-	buf = make([]byte, 1024)
-	n, e = c0.Read(buf)
-	if e != nil {
-		t.Errorf("write data failed: %s", e)
-	}
-	if n != len(testStr) {
-		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		buf = make([]byte, 1024)
+		n, e = c0.Read(buf)
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
 	}
 
 	e = c1.Close()

@@ -1,3 +1,6 @@
+/*
+Package extnet provides a portable interface for network I/O, including SCTP.
+*/
 package extnet
 
 const (
