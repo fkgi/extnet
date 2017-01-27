@@ -1,6 +1,7 @@
 package extnet
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -94,7 +95,9 @@ func (c *SCTPConn) queue(b []byte, e error) error {
 }
 
 func (c *SCTPConn) Write(b []byte) (int, error) {
-	n, e := c.send(b, 0)
+	buf := make([]byte, len(b))
+	copy(buf, b)
+	n, e := c.send(buf, 0)
 	if e != nil {
 		e = &net.OpError{
 			Op:     "write",
@@ -129,7 +132,9 @@ func (c *SCTPConn) Close() error {
 
 // Abort closes the connection with abort message.
 func (c *SCTPConn) Abort(reason string) error {
-	_, e := c.send([]byte(reason), sctpAbort)
+	buf := make([]byte, len([]byte(reason)))
+	copy(buf, []byte(reason))
+	_, e := c.send(buf, sctpAbort)
 	if e != nil {
 		e = &net.OpError{
 			Op:     "abort",
@@ -148,7 +153,35 @@ func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
 	}
 	info.flags = flag
 	info.assocID = c.id
-	return sctpSend(c.l.sock, b, &info, 0)
+	i, e := sctpSend(c.l.sock, b, &info, 0)
+
+	if Notificator != nil {
+		Notificator(&SctpSendData{
+			ID:   int(info.assocID),
+			Data: b[:i],
+			Err:  e})
+	}
+	return i, e
+}
+
+// SctpSendData is the error type that indicate
+// send data to the association.
+type SctpSendData struct {
+	ID   int
+	Data []byte
+	Err  error
+}
+
+func (e *SctpSendData) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Err != nil {
+		return fmt.Sprintf(
+			"send data to association(id=%d) failed %s: % x", e.ID, e.Err, e.Data)
+	}
+	return fmt.Sprintf(
+		"send data to association(id=%d): % x", e.ID, e.Data)
 }
 
 // LocalAddr returns the local network address.

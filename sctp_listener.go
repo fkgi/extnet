@@ -157,12 +157,12 @@ func read(l *SCTPListener, ready chan bool) {
 		snLength uint32
 	}
 
-	buf := make([]byte, RxBufferSize)
-	info := sndrcvInfo{}
-	flag := 0
-
 	ready <- true
 	for {
+		buf := make([]byte, RxBufferSize)
+		info := sndrcvInfo{}
+		flag := 0
+
 		// receive message
 		n, e := sctpRecvmsg(l.sock, buf, &info, &flag)
 		if e != nil {
