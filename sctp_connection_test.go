@@ -1,6 +1,7 @@
 package extnet
 
 import "testing"
+import "time"
 
 func TestReadWrite(t *testing.T) {
 	Notificator = func(e error) { t.Log(e) }
@@ -29,7 +30,10 @@ func TestReadWrite(t *testing.T) {
 		t.Errorf("accept faied: %s", e)
 	}
 
-	for i := 0; i < 10; i++ {
+	loop := true
+	time.AfterFunc(time.Second*time.Duration(10), func() { loop = false })
+
+	for loop {
 		n, e := c0.Write([]byte(testStr))
 		if e != nil {
 			t.Errorf("write data failed: %s", e)

@@ -180,6 +180,10 @@ func (l *SCTPListener) assocChangeNotify(buf []byte) {
 			Notificator(&SctpAssocStartFail{
 				ID: int(c.assocID)})
 		}
+	default:
+		panic(fmt.Sprintf(
+			"invalid state of association change notification on association %d",
+			c.assocID))
 	}
 	return
 }
@@ -196,7 +200,7 @@ func (e *SctpPeerAddrAvailable) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address of the association(id=%d) is now reachable", e.ID)
+		"address %s of the association(id=%d) is now reachable", e.IP, e.ID)
 }
 
 // SctpPeerAddrUnreachable is the error type that indicate
@@ -204,7 +208,7 @@ func (e *SctpPeerAddrAvailable) Error() string {
 type SctpPeerAddrUnreachable struct {
 	ID  int
 	IP  net.IP
-	Err int
+	Err uint32
 }
 
 func (e *SctpPeerAddrUnreachable) Error() string {
@@ -212,7 +216,7 @@ func (e *SctpPeerAddrUnreachable) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address of the association(id=%d) can no longer be reached", e.ID)
+		"address %s of the association(id=%d) can no longer be reached", e.IP, e.ID)
 }
 
 // SctpPeerAddrRemoved is the error type that indicate
@@ -220,7 +224,7 @@ func (e *SctpPeerAddrUnreachable) Error() string {
 type SctpPeerAddrRemoved struct {
 	ID  int
 	IP  net.IP
-	Err int
+	Err uint32
 }
 
 func (e *SctpPeerAddrRemoved) Error() string {
@@ -228,7 +232,7 @@ func (e *SctpPeerAddrRemoved) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address is no longer part of the association(id=%d)", e.ID)
+		"address %s is no longer part of the association(id=%d)", e.IP, e.ID)
 }
 
 // SctpPeerAddrAdded is the error type that indicate
@@ -243,7 +247,7 @@ func (e *SctpPeerAddrAdded) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address is now part of the association(id=%d)", e.ID)
+		"address %s is now part of the association(id=%d)", e.IP, e.ID)
 }
 
 // SctpPeerAddrMadePrim is the error type that indicate
@@ -258,7 +262,7 @@ func (e *SctpPeerAddrMadePrim) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address of the association(id=%d) is the primary destination", e.ID)
+		"address %s of the association(id=%d) is made to be the primary destination", e.IP, e.ID)
 }
 
 // SctpPeerAddrConfirmed is the error type that indicate
@@ -273,37 +277,28 @@ func (e *SctpPeerAddrConfirmed) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"address of the association(id=%d) is confirmed from peer", e.ID)
+		"address %s of the association(id=%d) is confirmed as a valid address", e.IP, e.ID)
 }
 
 func (l *SCTPListener) paddrChangeNotify(buf []byte) {
-	/*
-		type sockaddrStorage struct {
-			length uint8     // 1
-			family uint8     // 1
-			pad1   [6]byte   // 6
-			align  int64     // 8
-			pad2   [112]byte //112 = 128
-		}
-	*/
 	type ntfy struct {
 		chtype   uint16
 		flags    uint16
 		length   uint32
 		addr     [128]byte // sockaddrStorage
-		state    int
-		spcError int
+		state    uint32
+		spcError uint32
 		assocID  assocT
 	}
 
 	c := (*ntfy)(unsafe.Pointer(&buf[0]))
 	var ip net.IP
-	switch c.addr[1] {
+	switch (*syscall.RawSockaddrAny)(unsafe.Pointer(&c.addr[0])).Addr.Family {
 	case syscall.AF_INET:
-		a := *(*syscall.RawSockaddrInet4)(unsafe.Pointer(&c.addr))
+		a := *(*syscall.RawSockaddrInet4)(unsafe.Pointer(&c.addr[0]))
 		ip = net.IPv4(a.Addr[0], a.Addr[1], a.Addr[2], a.Addr[3])
 	case syscall.AF_INET6:
-		a := *(*syscall.RawSockaddrInet6)(unsafe.Pointer(&c.addr))
+		a := *(*syscall.RawSockaddrInet6)(unsafe.Pointer(&c.addr[0]))
 		ip = make([]byte, net.IPv6len)
 		for j := 0; j < net.IPv6len; j++ {
 			ip[j] = a.Addr[j]
@@ -353,6 +348,10 @@ func (l *SCTPListener) paddrChangeNotify(buf []byte) {
 				ID: int(c.assocID),
 				IP: ip})
 		}
+	default:
+		panic(fmt.Sprintf(
+			"invalid state of address change notification on association %d",
+			c.assocID))
 	}
 }
 

@@ -156,6 +156,9 @@ func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
 	i, e := sctpSend(c.l.sock, b, &info, 0)
 
 	if Notificator != nil {
+		if i < 0 {
+			i = 0
+		}
 		Notificator(&SctpSendData{
 			ID:   int(info.assocID),
 			Data: b[:i],
