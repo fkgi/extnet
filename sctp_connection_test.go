@@ -80,6 +80,88 @@ func TestReadWrite(t *testing.T) {
 	}
 }
 
+func TestReadWriteWithStream(t *testing.T) {
+	Notificator = func(e error) { t.Log(e) }
+
+	a0, e := ResolveSCTPAddr("sctp", testAddrs[0])
+	if e != nil {
+		t.Fatalf("address generation failure: %s", e)
+	}
+	a1, e := ResolveSCTPAddr("sctp", testAddrs[1])
+	if e != nil {
+		t.Fatalf("address generation failure: %s", e)
+	}
+
+	l0, e := ListenSCTP("sctp", a0)
+	if e != nil {
+		t.Fatalf("listen faied: %s", e)
+	}
+
+	c1, e := DialSCTP(a1, a0)
+	if e != nil {
+		t.Fatalf("dial faied: %s", e)
+	}
+
+	c0, e := l0.AcceptSCTP()
+	if e != nil {
+		t.Errorf("accept faied: %s", e)
+	}
+
+	loop := true
+	time.AfterFunc(time.Second*time.Duration(10), func() { loop = false })
+	stream := 0
+
+	for loop {
+		stream++
+		if stream > 65535 {
+			stream = 0
+		}
+		n, e := c0.WriteToStream([]byte(testStr), uint16(stream), uint32(stream))
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
+
+		buf := make([]byte, 1024)
+		n, e = c1.Read(buf)
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
+
+		n, e = c1.WriteToStream([]byte(testStr), uint16(stream), uint32(stream))
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
+
+		buf = make([]byte, 1024)
+		n, e = c0.Read(buf)
+		if e != nil {
+			t.Errorf("write data failed: %s", e)
+		}
+		if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		}
+	}
+
+	e = c1.Close()
+	if e != nil {
+		t.Errorf("close faied: %s", e)
+	}
+
+	e = l0.Close()
+	if e != nil {
+		t.Errorf("close faied: %s", e)
+	}
+}
+
 func TestCloseFromInit(t *testing.T) {
 	Notificator = func(e error) { t.Log(e) }
 
