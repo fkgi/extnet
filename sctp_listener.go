@@ -13,6 +13,7 @@ import (
 // SCTPListener is a SCTP network listener.
 type SCTPListener struct {
 	sock   int
+	ppid   uint32
 	con    map[assocT]*SCTPConn
 	accept chan *SCTPConn
 	m      sync.Mutex
@@ -209,8 +210,10 @@ func read(l *SCTPListener, ready chan bool) {
 		} else {
 			if Notificator != nil {
 				Notificator(&SctpRecieveData{
-					ID:   int(info.assocID),
-					Data: buf[:n]})
+					ID:     int(info.assocID),
+					Stream: int(info.stream),
+					PPID:   int(info.ppid),
+					Data:   buf[:n]})
 			}
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
@@ -238,14 +241,21 @@ func read(l *SCTPListener, ready chan bool) {
 // SctpRecieveData is the error type that indicate
 // recieve data form the association.
 type SctpRecieveData struct {
-	ID   int
-	Data []byte
+	ID     int
+	Stream int
+	PPID   int
+	Data   []byte
 }
 
 func (e *SctpRecieveData) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
+	s, ok := ppidStr[e.PPID]
+	if !ok {
+		s = "Unassigned"
+	}
 	return fmt.Sprintf(
-		"recieve data from association(id=%d): % x", e.ID, e.Data)
+		"recieve data from assoc(id=%d, stream=%d, ppid=%s): % x",
+		e.ID, e.Stream, s, e.Data)
 }

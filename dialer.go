@@ -15,6 +15,8 @@ type SCTPDialer struct {
 	InStream    uint
 	MaxAttempts uint
 	InitTimeout time.Duration
+
+	PPID uint32
 }
 
 // DialSCTP connects from the local address laddr
@@ -136,7 +138,8 @@ func listen(d *SCTPDialer) (*SCTPListener, error) {
 	l := &SCTPListener{
 		sock:   sock,
 		con:    make(map[assocT]*SCTPConn),
-		accept: make(chan *SCTPConn, BacklogSize)}
+		accept: make(chan *SCTPConn, BacklogSize),
+		ppid:   d.PPID}
 
 	// start reading buffer
 	r := make(chan bool)

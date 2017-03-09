@@ -97,7 +97,23 @@ func (c *SCTPConn) queue(b []byte, e error) error {
 func (c *SCTPConn) Write(b []byte) (int, error) {
 	buf := make([]byte, len(b))
 	copy(buf, b)
-	n, e := c.send(buf, 0)
+	n, e := c.send(buf, c.l.ppid, 0, 0)
+	if e != nil {
+		e = &net.OpError{
+			Op:     "write",
+			Net:    "sctp",
+			Source: c.LocalAddr(),
+			Addr:   c.RemoteAddr(),
+			Err:    e}
+	}
+	return n, e
+}
+
+// WriteToStream write data with specified stream and ppid.
+func (c *SCTPConn) WriteToStream(b []byte, s uint16, i uint32) (int, error) {
+	buf := make([]byte, len(b))
+	copy(buf, b)
+	n, e := c.send(buf, i, s, 0)
 	if e != nil {
 		e = &net.OpError{
 			Op:     "write",
@@ -111,7 +127,7 @@ func (c *SCTPConn) Write(b []byte) (int, error) {
 
 // Close closes the connection.
 func (c *SCTPConn) Close() error {
-	_, e := c.send([]byte{}, sctpEoF)
+	_, e := c.send([]byte{}, 0, 0, sctpEoF)
 	if e != nil {
 		e = &net.OpError{
 			Op:     "close",
@@ -134,7 +150,7 @@ func (c *SCTPConn) Close() error {
 func (c *SCTPConn) Abort(reason string) error {
 	buf := make([]byte, len([]byte(reason)))
 	copy(buf, []byte(reason))
-	_, e := c.send(buf, sctpAbort)
+	_, e := c.send(buf, 0, 0, sctpAbort)
 	if e != nil {
 		e = &net.OpError{
 			Op:     "abort",
@@ -146,13 +162,16 @@ func (c *SCTPConn) Abort(reason string) error {
 	return e
 }
 
-func (c *SCTPConn) send(b []byte, flag uint16) (int, error) {
+func (c *SCTPConn) send(b []byte, p uint32, s, f uint16) (int, error) {
 	info := sndrcvInfo{}
 	if n := time.Now(); !c.wd.IsZero() && n.Before(c.wd) {
 		info.timetolive = uint32(c.wd.Sub(n))
 	}
-	info.flags = flag
+	info.stream = s
+	info.flags = f
 	info.assocID = c.id
+	info.ppid = p
+
 	i, e := sctpSend(c.l.sock, b, &info, 0)
 
 	if Notificator != nil {
