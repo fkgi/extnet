@@ -358,7 +358,8 @@ func (l *SCTPListener) paddrChangeNotify(buf []byte) {
 // SctpSendFailed is the error type that indicate
 // SCTP cannot deliver a message.
 type SctpSendFailed struct {
-	ID int
+	ID  int
+	Err error
 }
 
 func (e *SctpSendFailed) Error() string {
@@ -366,7 +367,7 @@ func (e *SctpSendFailed) Error() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf(
-		"message send failed on association(id=%d)", e.ID)
+		"message send failed on association(id=%d) reason is %s", e.ID, e.Err)
 }
 
 func (l *SCTPListener) sendFailedNotify(buf []byte) {
@@ -386,7 +387,8 @@ func (l *SCTPListener) sendFailedNotify(buf []byte) {
 	}
 	if Notificator != nil {
 		Notificator(&SctpSendFailed{
-			ID: int(c.assocID)})
+			ID:  int(c.assocID),
+			Err: sctpErrorMap[uint16(c.ssfError)]})
 	}
 }
 

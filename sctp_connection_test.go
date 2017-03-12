@@ -1,7 +1,9 @@
 package extnet
 
-import "testing"
-import "time"
+import (
+	"testing"
+	"time"
+)
 
 func TestReadWrite(t *testing.T) {
 	Notificator = func(e error) { t.Log(e) }
@@ -30,41 +32,28 @@ func TestReadWrite(t *testing.T) {
 		t.Errorf("accept faied: %s", e)
 	}
 
+	buf := make([]byte, 1024)
 	loop := true
-	time.AfterFunc(time.Second*time.Duration(10), func() { loop = false })
+	time.AfterFunc(time.Second*time.Duration(1), func() { loop = false })
 
 	for loop {
-		n, e := c0.Write([]byte(testStr))
-		if e != nil {
+		if n, e := c0.Write([]byte(testStr)); e != nil {
 			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
+		} else if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		} else if n, e = c1.Read(buf); e != nil {
+			t.Errorf("write data failed: %s", e)
+		} else if n != len(testStr) {
 			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
 		}
 
-		buf := make([]byte, 1024)
-		n, e = c1.Read(buf)
-		if e != nil {
+		if n, e := c1.Write([]byte(testStr)); e != nil {
 			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
+		} else if n != len(testStr) {
 			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-		}
-
-		n, e = c1.Write([]byte(testStr))
-		if e != nil {
+		} else if n, e = c0.Read(buf); e != nil {
 			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
-			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-		}
-
-		buf = make([]byte, 1024)
-		n, e = c0.Read(buf)
-		if e != nil {
-			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
+		} else if n != len(testStr) {
 			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
 		}
 	}
@@ -92,63 +81,126 @@ func TestReadWriteWithStream(t *testing.T) {
 		t.Fatalf("address generation failure: %s", e)
 	}
 
-	l0, e := ListenSCTP("sctp", a0)
+	d0 := &SCTPDialer{
+		LocalAddr: a0,
+		OutStream: 128,
+		InStream:  64}
+	l0a, e := d0.Listen()
 	if e != nil {
 		t.Fatalf("listen faied: %s", e)
 	}
+	l0 := l0a.(*SCTPListener)
 
-	c1, e := DialSCTP(a1, a0)
+	d1 := &SCTPDialer{
+		LocalAddr: a1,
+		OutStream: 128,
+		InStream:  64}
+	c1a, e := d1.Dial("sctp", testAddrs[0])
 	if e != nil {
 		t.Fatalf("dial faied: %s", e)
 	}
+	c1 := c1a.(*SCTPConn)
 
 	c0, e := l0.AcceptSCTP()
 	if e != nil {
 		t.Errorf("accept faied: %s", e)
 	}
 
-	loop := true
-	time.AfterFunc(time.Second*time.Duration(10), func() { loop = false })
-	stream := 0
+	buf := make([]byte, 1024)
 
-	for loop {
-		stream++
-		if stream > 65535 {
-			stream = 0
-		}
-		n, e := c0.WriteToStream([]byte(testStr), uint16(stream), uint32(stream))
-		if e != nil {
+	for i := 0; i < 63; i++ {
+		if n, e := c0.WriteToStream([]byte(testStr), uint16(i), uint32(i)); e != nil {
 			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
+		} else if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		} else if n, e = c1.Read(buf); e != nil {
+			t.Errorf("write data failed: %s", e)
+		} else if n != len(testStr) {
 			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
 		}
+		i++
 
-		buf := make([]byte, 1024)
-		n, e = c1.Read(buf)
-		if e != nil {
+		if n, e := c1.WriteToStream([]byte(testStr), uint16(i), uint32(i)); e != nil {
 			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
+		} else if n != len(testStr) {
+			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+		} else if n, e = c0.Read(buf); e != nil {
+			t.Errorf("write data failed: %s", e)
+		} else if n != len(testStr) {
 			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
 		}
+	}
 
-		n, e = c1.WriteToStream([]byte(testStr), uint16(stream), uint32(stream))
-		if e != nil {
-			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
-			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-		}
+	if _, e := c0.WriteToStream([]byte(testStr), 64, 64); e == nil {
+		t.Errorf("data writing must be failed")
+	}
 
-		buf = make([]byte, 1024)
-		n, e = c0.Read(buf)
-		if e != nil {
-			t.Errorf("write data failed: %s", e)
-		}
-		if n != len(testStr) {
-			t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
-		}
+	e = c1.Close()
+	if e != nil {
+		t.Errorf("close faied: %s", e)
+	}
+
+	e = l0.Close()
+	if e != nil {
+		t.Errorf("close faied: %s", e)
+	}
+}
+
+func TestReadWriteUnordered(t *testing.T) {
+	Notificator = func(e error) { t.Log(e) }
+
+	a0, e := ResolveSCTPAddr("sctp", testAddrs[0])
+	if e != nil {
+		t.Fatalf("address generation failure: %s", e)
+	}
+	a1, e := ResolveSCTPAddr("sctp", testAddrs[1])
+	if e != nil {
+		t.Fatalf("address generation failure: %s", e)
+	}
+
+	d0 := &SCTPDialer{
+		LocalAddr: a0,
+		Unordered: true}
+	l0a, e := d0.Listen()
+	if e != nil {
+		t.Fatalf("listen faied: %s", e)
+	}
+	l0 := l0a.(*SCTPListener)
+
+	d1 := &SCTPDialer{
+		LocalAddr: a1,
+		Unordered: true}
+	c1a, e := d1.Dial("sctp", testAddrs[0])
+	if e != nil {
+		t.Fatalf("dial faied: %s", e)
+	}
+	c1 := c1a.(*SCTPConn)
+
+	c0, e := l0.AcceptSCTP()
+	if e != nil {
+		t.Errorf("accept faied: %s", e)
+	}
+
+	buf := make([]byte, 1024)
+
+	if n, e := c0.Write([]byte(testStr)); e != nil {
+		t.Errorf("write data failed: %s", e)
+	} else if n != len(testStr) {
+		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+	} else if n, e = c1.Read(buf); e != nil {
+		t.Errorf("write data failed: %s", e)
+	} else if n != len(testStr) {
+		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+	}
+
+	if n, e := c1.Write([]byte(testStr)); e != nil {
+		t.Errorf("write data failed: %s", e)
+	} else if n != len(testStr) {
+		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
+	} else if n, e = c0.Read(buf); e != nil {
+		t.Errorf("write data failed: %s", e)
+	} else if n != len(testStr) {
+		t.Errorf("write data length is invalid: %d is not equal %d", n, len(testStr))
 	}
 
 	e = c1.Close()

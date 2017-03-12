@@ -168,20 +168,22 @@ func (c *SCTPConn) send(b []byte, p uint32, s, f uint16) (int, error) {
 		info.timetolive = uint32(c.wd.Sub(n))
 	}
 	info.stream = s
-	info.flags = f
+	info.flags = f | c.l.uo
 	info.assocID = c.id
 	info.ppid = p
 
 	i, e := sctpSend(c.l.sock, b, &info, 0)
-
 	if Notificator != nil {
 		if i < 0 {
 			i = 0
 		}
 		Notificator(&SctpSendData{
-			ID:   int(info.assocID),
-			Data: b[:i],
-			Err:  e})
+			ID:        int(info.assocID),
+			Stream:    int(info.stream),
+			PPID:      int(info.ppid),
+			Unordered: info.flags&sctpUnordered == sctpUnordered,
+			Data:      b[:i],
+			Err:       e})
 	}
 	return i, e
 }
@@ -189,21 +191,35 @@ func (c *SCTPConn) send(b []byte, p uint32, s, f uint16) (int, error) {
 // SctpSendData is the error type that indicate
 // send data to the association.
 type SctpSendData struct {
-	ID   int
-	Data []byte
-	Err  error
+	ID        int
+	Stream    int
+	PPID      int
+	Unordered bool
+	Data      []byte
+	Err       error
 }
 
 func (e *SctpSendData) Error() string {
 	if e == nil {
 		return "<nil>"
 	}
+	s, ok := ppidStr[e.PPID]
+	if !ok {
+		s = "Unassigned"
+	}
+	uo := ""
+	if e.Unordered {
+		uo = ", unorderd"
+	}
+
 	if e.Err != nil {
 		return fmt.Sprintf(
-			"send data to association(id=%d) failed %s: % x", e.ID, e.Err, e.Data)
+			"send data to association(id=%d, stream=%d, ppid=%s%s) failed, %s: % x",
+			e.ID, e.Stream, s, uo, e.Err, e.Data)
 	}
 	return fmt.Sprintf(
-		"send data to association(id=%d): % x", e.ID, e.Data)
+		"send data to association(id=%d, stream=%d, ppid=%s%s): % x",
+		e.ID, e.Stream, s, uo, e.Data)
 }
 
 // LocalAddr returns the local network address.

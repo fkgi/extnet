@@ -14,6 +14,7 @@ import (
 type SCTPListener struct {
 	sock   int
 	ppid   uint32
+	uo     uint16
 	con    map[assocT]*SCTPConn
 	accept chan *SCTPConn
 	m      sync.Mutex
@@ -186,7 +187,6 @@ func read(l *SCTPListener, ready chan bool) {
 		// check message type is notify
 		if flag&msgNotification == msgNotification {
 			tlv := (*sctpTlv)(unsafe.Pointer(&buf[0]))
-
 			switch tlv.snType {
 			case sctpAssocChange:
 				l.assocChangeNotify(buf[:n])
@@ -205,15 +205,18 @@ func read(l *SCTPListener, ready chan bool) {
 			case sctpSenderDryEvent:
 				l.senderDryNotify(buf[:n])
 			default:
-				println(tlv.snType)
+				panic(fmt.Sprintf(
+					"unknown notification type %d",
+					tlv.snType))
 			}
 		} else {
 			if Notificator != nil {
 				Notificator(&SctpRecieveData{
-					ID:     int(info.assocID),
-					Stream: int(info.stream),
-					PPID:   int(info.ppid),
-					Data:   buf[:n]})
+					ID:        int(info.assocID),
+					Stream:    int(info.stream),
+					PPID:      int(info.ppid),
+					Unordered: info.flags&sctpUnordered == sctpUnordered,
+					Data:      buf[:n]})
 			}
 			// matching exist connection
 			if p, ok := l.con[info.assocID]; ok {
@@ -241,10 +244,11 @@ func read(l *SCTPListener, ready chan bool) {
 // SctpRecieveData is the error type that indicate
 // recieve data form the association.
 type SctpRecieveData struct {
-	ID     int
-	Stream int
-	PPID   int
-	Data   []byte
+	ID        int
+	Stream    int
+	PPID      int
+	Unordered bool
+	Data      []byte
 }
 
 func (e *SctpRecieveData) Error() string {
@@ -255,7 +259,11 @@ func (e *SctpRecieveData) Error() string {
 	if !ok {
 		s = "Unassigned"
 	}
+	uo := ""
+	if e.Unordered {
+		uo = ", unorderd"
+	}
 	return fmt.Sprintf(
-		"recieve data from assoc(id=%d, stream=%d, ppid=%s): % x",
-		e.ID, e.Stream, s, e.Data)
+		"recieve data from assoc(id=%d, stream=%d, ppid=%s%s): % x",
+		e.ID, e.Stream, s, uo, e.Data)
 }

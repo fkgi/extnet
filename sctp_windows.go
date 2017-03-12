@@ -11,9 +11,9 @@ const (
 	sctpBindxAddAddr = 0x00008001
 	// sctpBindxRemAddr = 0x00008002
 
-	sctpEoF   = 0x0100
-	sctpAbort = 0x0200
-	// SCTP_UNORDERED = 0x0400
+	sctpEoF       = 0x0100
+	sctpAbort     = 0x0200
+	sctpUnordered = 0x0400
 	// SCTP_ADDR_OVER = 0x0800
 	// SCTP_SENDALL = 0x1000
 	// SCTP_EOR = 0x2000

@@ -16,7 +16,8 @@ type SCTPDialer struct {
 	MaxAttempts uint
 	InitTimeout time.Duration
 
-	PPID uint32
+	PPID      uint32
+	Unordered bool
 }
 
 // DialSCTP connects from the local address laddr
@@ -140,6 +141,9 @@ func listen(d *SCTPDialer) (*SCTPListener, error) {
 		con:    make(map[assocT]*SCTPConn),
 		accept: make(chan *SCTPConn, BacklogSize),
 		ppid:   d.PPID}
+	if d.Unordered {
+		l.uo = sctpUnordered
+	}
 
 	// start reading buffer
 	r := make(chan bool)
